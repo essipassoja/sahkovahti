@@ -178,11 +178,11 @@ button.ghost { background: transparent; }
 .light-card[data-level="green"]  { border-left-color: var(--lamp-green); }
 .light-card[data-level="yellow"] { border-left-color: var(--lamp-yellow); }
 .light-card[data-level="red"]    { border-left-color: var(--lamp-red); }
-.lamps { flex: none; display: flex; flex-direction: column; gap: 12px; padding: 14px; border-radius: 28px; background: #1d1d1b; }
-.lamp { width: 64px; height: 64px; border-radius: 50%; background: #3a3a36; }
-.light-card[data-level="red"] .lamp.red { background: var(--lamp-red); box-shadow: 0 0 28px var(--lamp-red); }
-.light-card[data-level="yellow"] .lamp.yellow { background: var(--lamp-yellow); box-shadow: 0 0 28px var(--lamp-yellow); }
-.light-card[data-level="green"] .lamp.green { background: var(--lamp-green); box-shadow: 0 0 28px var(--lamp-green); }
+.lamps { flex: none; display: flex; flex-direction: column; gap: 9px; padding: 11px; border-radius: 24px; background: #1d1d1b; }
+.lamp { width: 48px; height: 48px; border-radius: 50%; background: #3a3a36; }
+.light-card[data-level="red"] .lamp.red { background: var(--lamp-red); box-shadow: 0 0 22px var(--lamp-red); }
+.light-card[data-level="yellow"] .lamp.yellow { background: var(--lamp-yellow); box-shadow: 0 0 22px var(--lamp-yellow); }
+.light-card[data-level="green"] .lamp.green { background: var(--lamp-green); box-shadow: 0 0 22px var(--lamp-green); }
 .verdict h2 { font-size: 30px; line-height: 1.15; letter-spacing: -0.02em; }
 .verdict p { margin: 8px 0 0; color: var(--text-2); font-size: 17px; }
 .verdict .next { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
