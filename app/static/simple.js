@@ -83,10 +83,55 @@
       : " ";
   }
 
+  // MET Norway symbol codes, e.g. "lightrainshowers_day" → icon + text
+  const WX = [
+    ["thunder", "⛈️", "Thunder"], ["heavysnow", "❄️", "Heavy snow"], ["snow", "🌨️", "Snow"],
+    ["sleet", "🌨️", "Sleet"], ["heavyrain", "🌧️", "Heavy rain"], ["lightrain", "🌦️", "Light rain"],
+    ["rain", "🌧️", "Rain"], ["fog", "🌫️", "Fog"], ["cloudy", "☁️", "Cloudy"],
+  ];
+  function wx(code) {
+    if (!code) return ["", ""];
+    const night = code.endsWith("_night") || code.endsWith("_polartwilight");
+    const base = code.split("_")[0];
+    if (base === "clearsky") return [night ? "🌙" : "☀️", "Clear"];
+    if (base === "fair") return [night ? "🌙" : "🌤️", "Mostly clear"];
+    if (base === "partlycloudy") return [night ? "☁️" : "⛅", "Partly cloudy"];
+    const hit = WX.find(([k]) => base.includes(k));
+    if (!hit) return ["", base];
+    return [hit[1], hit[2] + (base.endsWith("showers") ? " showers" : "")];
+  }
+  const deg = (v) => (v == null ? "–" : f0.format(Math.round(v) || 0));
+
+  async function loadWeather() {
+    let w;
+    try { w = await get("/api/weather"); } catch { return; }
+    if (!w.enabled || !w.now) { $("weather").hidden = true; return; }
+    $("weather").hidden = false;
+    const [icon, text] = wx(w.now.symbol);
+    $("wxIcon").textContent = icon;
+    $("wxPlace").textContent = w.place ? `Weather in ${w.place}` : "Weather now";
+    $("wxTemp").textContent = deg(w.now.temp);
+    const rain = w.now.precip_mm ? ` · ${num(w.now.precip_mm, f1)} mm/h` : "";
+    $("wxDesc").textContent = `${text} · wind ${num(w.now.wind, f0)} m/s${rain}`;
+    $("wxNext").replaceChildren(...w.next.map((p) => {
+      const li = document.createElement("li");
+      const [i, t] = wx(p.symbol);
+      li.title = t;
+      li.innerHTML = `<div class="t"></div><div class="i"></div><div class="v"></div><div class="p"></div>`;
+      li.querySelector(".t").textContent = hm(p.ts);
+      li.querySelector(".i").textContent = i;
+      li.querySelector(".v").textContent = deg(p.temp) + "°";
+      li.querySelector(".p").textContent = p.precip_mm ? `${num(p.precip_mm, f1)} mm` : "";
+      return li;
+    }));
+  }
+
   (async function boot() {
     await loadStatus();
     await loadLive();
     setInterval(loadLive, 5000);
     setInterval(loadStatus, 120000);
+    loadWeather();
+    setInterval(loadWeather, 15 * 60000);
   })();
 })();

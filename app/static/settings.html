@@ -158,6 +158,27 @@
           <span class="msg" id="testMsg" role="status">&nbsp;</span>
         </div>
       </fieldset>
+
+      <fieldset class="panel">
+        <legend>Weather <span class="muted">front page · from Yr / MET Norway</span></legend>
+        <label class="check wide"><input name="weather.enabled" type="checkbox">
+          <span>Show the weather on the front page</span></label>
+        <div class="field wide">Find your location
+          <span class="inline-input"><input id="wxQuery" type="search" placeholder="Town or street address, e.g. Tampere"
+              aria-label="Town or street address" autocomplete="off">
+            <button type="button" id="wxSearch">Search</button>
+            <button type="button" id="wxHere" hidden>Use this device</button></span>
+          <ul class="place-results" id="wxResults" hidden></ul>
+          <small class="msg" id="wxMsg">Search by <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, or type the coordinates below.</small></div>
+        <label class="field wide">Name shown on the front page
+          <input name="weather.place" type="text" maxlength="80" placeholder="e.g. Home"></label>
+        <label class="field">Latitude <span class="unit">° north</span>
+          <input name="weather.latitude" type="number" step="0.0001" min="-90" max="90" inputmode="decimal" required>
+          <small>e.g. 60.1699</small></label>
+        <label class="field">Longitude <span class="unit">° east</span>
+          <input name="weather.longitude" type="number" step="0.0001" min="-180" max="180" inputmode="decimal" required>
+          <small>e.g. 24.9384</small></label>
+      </fieldset>
     </div>
 
     <aside class="settings-side">
@@ -186,7 +207,7 @@
   </div>
   <a href="/">Now<small>Traffic light, price and consumption</small></a>
   <a href="/details">Details<small>Day charts, power history, cheapest windows, monthly totals</small></a>
-  <a href="/settings" aria-current="page">Settings<small>Your contract, transfer prices and traffic light</small></a>
+  <a href="/settings" aria-current="page">Settings<small>Your contract, transfer prices, traffic light and weather location</small></a>
 </nav>
 <div class="scrim" id="scrim" hidden></div>
 <script src="/static/nav.js"></script>

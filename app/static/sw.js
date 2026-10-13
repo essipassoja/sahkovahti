@@ -1,7 +1,7 @@
 // Service worker: makes the app installable and lets the pages open without a connection.
 // Pages and static files: network first, cached copy when offline. API data is never cached,
 // so numbers on screen are always live (pages show "App not reachable" when offline).
-const CACHE = "sahkovahti-v1";
+const CACHE = "sahkovahti-v3";
 const SHELL = [
   "/", "/details", "/settings",
   "/static/style.css", "/static/nav.js", "/static/simple.js", "/static/app.js", "/static/charts.js",

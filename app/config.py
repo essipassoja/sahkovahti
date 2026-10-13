@@ -271,7 +271,32 @@ class Notifications:
         return a <= hour < b if a < b else (hour >= a or hour < b)
 
 
-SECTIONS = {"tariff": Tariff, "traffic_light": TrafficLight, "notifications": Notifications}
+@dataclass
+class WeatherSettings:
+    """Front-page weather from MET Norway (yr.no) for this location."""
+    enabled: bool = True
+    place: str = "Helsinki"        # shown on the front page
+    latitude: float = 60.1699
+    longitude: float = 24.9384
+
+    def __post_init__(self):
+        if not isinstance(self.enabled, bool):
+            raise ValueError("enabled must be true or false")
+        self.place = str(self.place or "").strip()[:80]
+        # MET asks for at most 4 decimals (~10 m), more only defeats their cache
+        self.latitude = round(_num("latitude", self.latitude, -90, 90), 4)
+        self.longitude = round(_num("longitude", self.longitude, -180, 180), 4)
+
+    @classmethod
+    def keys(cls) -> list[str]:
+        return [f.name for f in fields(cls)]
+
+    def as_dict(self) -> dict:
+        return {k: getattr(self, k) for k in self.keys()}
+
+
+SECTIONS = {"tariff": Tariff, "traffic_light": TrafficLight, "notifications": Notifications,
+            "weather": WeatherSettings}
 
 
 @dataclass
@@ -284,6 +309,7 @@ class Config:
     tariff: Tariff
     light: TrafficLight = field(default_factory=TrafficLight)
     notify: Notifications = field(default_factory=Notifications)
+    weather: WeatherSettings = field(default_factory=WeatherSettings)
     prices: dict = field(default_factory=dict)
     meter: dict = field(default_factory=dict)
 
@@ -291,7 +317,7 @@ class Config:
         """Settings sections from config.toml, before settings-page overrides."""
         return {k: self.raw.get(k, {}) for k in SECTIONS}
 
-    def build(self, overrides: dict | None) -> tuple[Tariff, TrafficLight, Notifications]:
+    def build(self, overrides: dict | None) -> tuple[Tariff, TrafficLight, Notifications, WeatherSettings]:
         """Validate config.toml values + overrides; raises ValueError with a readable message."""
         o, d = overrides or {}, self.defaults()
         for section, cls in SECTIONS.items():
@@ -302,10 +328,11 @@ class Config:
                         stored_spot_vat_percent=self.prices.get("vat_percent", 25.5))
         light = TrafficLight(**{**d["traffic_light"], **o.get("traffic_light", {})})
         notify = Notifications(**{**d["notifications"], **o.get("notifications", {})})
-        return tariff, light, notify
+        weather = WeatherSettings(**{**d["weather"], **o.get("weather", {})})
+        return tariff, light, notify, weather
 
     def apply(self, overrides: dict | None) -> None:
-        self.tariff, self.light, self.notify = self.build(overrides)
+        self.tariff, self.light, self.notify, self.weather = self.build(overrides)
 
 
 def load(path: str | Path | None = None) -> Config:
@@ -322,6 +349,7 @@ def load(path: str | Path | None = None) -> Config:
                         stored_spot_vat_percent=raw.get("prices", {}).get("vat_percent", 25.5))
         light = TrafficLight(**raw.get("traffic_light", {}))
         notify = Notifications(**raw.get("notifications", {}))
+        weather = WeatherSettings(**raw.get("weather", {}))
     except (TypeError, ValueError) as e:
         raise SystemExit(f"config.toml: {e}") from None
     return Config(
@@ -333,6 +361,7 @@ def load(path: str | Path | None = None) -> Config:
         tariff=tariff,
         light=light,
         notify=notify,
+        weather=weather,
         prices=raw.get("prices", {}),
         meter=raw.get("meter", {}),
     )

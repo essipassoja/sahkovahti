@@ -51,6 +51,15 @@ grid_monthly_eur       = 0.0     # grid basic fee (perusmaksu), €/month
 electricity_tax_c_kwh = 2.253    # electricity tax (sähkövero), class I, without VAT — the rate changes with budgets
 vat_percent           = 25.5     # VAT (arvonlisävero), added to spot, margin, transfer, tax and basic fees
 
+[weather]
+# Weather on the front page, from MET Norway (the data behind yr.no) — free, no API key.
+# Easiest: set the location on the Settings page (menu → Settings → Weather, with a place search);
+# values saved there override this section. Max 4 decimals of the coordinates are used.
+enabled   = true
+place     = "Helsinki"
+latitude  = 60.1699
+longitude = 24.9384
+
 [traffic_light]
 # The front page shows green / yellow / red: is now a good time to run big loads
 # (sauna, EV charging, laundry, dishwasher)? Thresholds in c/kWh.

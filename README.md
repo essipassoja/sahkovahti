@@ -5,6 +5,7 @@ A small local web app that shows your household's electricity use next to the Fi
 
 - **Front page for phone / tablet**: a green / yellow / red traffic light telling whether now is a good
   time for big loads, plus price now and power now. Thresholds are set in `[traffic_light]` in `config.toml`.
+  Also the weather now and for the next hours from Yr (MET Norway).
   The detailed dashboard opens from the menu (or go to `/details`)
 - **Live**: power now, price now (spot + your margin, transfer and tax), €/h right now, per‑phase current
 - **Day view**: spot price and your consumption/cost for every 15‑minute slot, side by side
@@ -53,6 +54,17 @@ Prices come from [porssisahko.net](https://porssisahko.net) (Nord Pool day‑ahe
 1 Oct 2025, VAT 25.5 % included). Tomorrow's prices are published around 14:00; the app polls
 more often in the afternoon until they appear. Price history accumulates from the day you start the
 app, so costs for days before that show as "no prices stored".
+
+## Weather
+
+The front page shows the weather now and the next 12 hours from [Yr](https://www.yr.no) (MET Norway's free
+[Locationforecast API](https://api.met.no/weatherapi/locationforecast/2.0/documentation), no key needed).
+Set your location on **menu → Settings → Weather**: search for your town or street address (via
+[OpenStreetMap](https://www.openstreetmap.org)), or type the coordinates, and Save. You can also turn the weather off there.
+`[weather]` in `config.toml` holds the default (Helsinki). The app fetches the
+forecast at most every ~30 min, as MET's terms ask. On **Windows**, if the log says
+`CERTIFICATE_VERIFY_FAILED` for api.met.no, open <https://api.met.no> once in Edge (this installs the
+certificate authority it uses into Windows) and restart the app.
 
 ## Use it on your phone or tablet
 

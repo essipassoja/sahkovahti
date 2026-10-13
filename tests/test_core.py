@@ -17,6 +17,7 @@ from app.db import DB  # noqa: E402
 from app.meter.base import Reading  # noqa: E402
 from app.meter.p1 import TelegramAssembler, check_crc, crc16, parse_telegram  # noqa: E402
 from app.prices import parse_porssisahko  # noqa: E402
+from app.weather import summarize  # noqa: E402
 
 BODY = (
     "/ADN9 6534\r\n"
@@ -260,6 +261,13 @@ class SettingsTests(unittest.TestCase):
         cfg.apply({})
         self.assertEqual(cfg.tariff.spot_discount_percent, 0)
 
+    def test_weather_location_override(self):
+        cfg = self._cfg()
+        self.assertEqual(cfg.weather.place, "Helsinki")         # default without a [weather] section
+        cfg.apply({"weather": {"place": "Tampere", "latitude": 61.4978, "longitude": 23.761}})
+        self.assertEqual((cfg.weather.place, cfg.weather.latitude), ("Tampere", 61.4978))
+        self.assertTrue(cfg.weather.enabled)
+
     def test_unknown_key_rejected(self):
         with self.assertRaises(ValueError):
             self._cfg().build({"tariff": {"tz": "UTC"}})
@@ -361,6 +369,30 @@ class NotifierTests(unittest.TestCase):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 Notifications(**bad)
 
+
+class WeatherTest(unittest.TestCase):
+    def test_summarize_now_and_every_third_hour(self):
+        def entry(h, temp):
+            return {"time": f"2026-10-13T{h:02d}:00:00Z", "data": {
+                "instant": {"details": {"air_temperature": temp, "wind_speed": 2.0}},
+                "next_1_hours": {"summary": {"symbol_code": "rain"}, "details": {"precipitation_amount": 0.4}}}}
+        payload = {"properties": {"timeseries": [entry(h, float(h)) for h in range(8, 24)]}}
+        now = datetime(2026, 10, 13, 9, 30, tzinfo=ZoneInfo("UTC")).timestamp()
+        w = summarize(payload, now)
+        self.assertEqual(w["now"]["temp"], 9.0)
+        self.assertEqual(w["now"]["symbol"], "rain")
+        self.assertEqual([p["temp"] for p in w["next"]], [12.0, 15.0, 18.0, 21.0])
+
+    def test_location_settings(self):
+        from app.config import WeatherSettings
+        w = WeatherSettings(latitude="61.49781234", longitude=23.761)
+        self.assertEqual((w.latitude, w.longitude), (61.4978, 23.761))
+        for bad in ({"latitude": 91}, {"longitude": "x"}, {"enabled": "yes"}):
+            with self.assertRaises(ValueError):
+                WeatherSettings(**bad)
+
+    def test_summarize_empty(self):
+        self.assertEqual(summarize({}, 0), {"now": None, "next": [], "updated_at": None})
 
 if __name__ == "__main__":
     unittest.main()

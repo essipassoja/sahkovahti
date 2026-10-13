@@ -32,7 +32,7 @@
   }
 
   function read() {
-    const out = { tariff: {}, traffic_light: {}, notifications: {} };
+    const out = { tariff: {}, traffic_light: {}, notifications: {}, weather: {} };
     for (const el of form.elements) {
       if (!el.name || !el.name.includes(".")) continue;
       const [sec, key] = el.name.split(".");
@@ -156,6 +156,59 @@
       $("testBtn").disabled = false;
     }
   };
+
+  // ---------- weather location ----------
+  function setWx(text, cls = "") { $("wxMsg").textContent = text; $("wxMsg").className = "msg " + cls; }
+  function useLocation(lat, lon, name) {
+    form.elements["weather.latitude"].value = lat.toFixed(4);
+    form.elements["weather.longitude"].value = lon.toFixed(4);
+    if (name != null) form.elements["weather.place"].value = name;
+    $("wxResults").hidden = true;
+    setWx("Location set. Save to use it on the front page.", "ok");
+    preview();
+  }
+  async function searchPlace() {
+    const q = $("wxQuery").value.trim();
+    if (q.length < 2) { setWx("Type a town or an address first.", "warn"); return; }
+    $("wxSearch").disabled = true;
+    setWx("Searching…");
+    try {
+      const r = await fetch("/api/geocode?q=" + encodeURIComponent(q), { cache: "no-store" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "HTTP " + r.status);
+      const list = $("wxResults");
+      list.replaceChildren(...d.results.map((p) => {
+        const li = document.createElement("li"), b = document.createElement("button"), sm = document.createElement("small");
+        b.type = "button";
+        b.textContent = p.name;
+        sm.textContent = p.label;
+        b.append(sm);
+        b.onclick = () => useLocation(p.latitude, p.longitude, p.name);
+        li.append(b);
+        return li;
+      }));
+      list.hidden = !d.results.length;
+      setWx(d.results.length ? "Pick the right one:" : "Nothing found. Try another spelling or a nearby town.",
+        d.results.length ? "" : "warn");
+    } catch (err) {
+      setWx(err.message, "bad");
+    } finally {
+      $("wxSearch").disabled = false;
+    }
+  }
+  $("wxSearch").onclick = searchPlace;
+  $("wxQuery").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); searchPlace(); } });
+  // browsers only share the location over https or on localhost
+  if (navigator.geolocation && window.isSecureContext) {
+    $("wxHere").hidden = false;
+    $("wxHere").onclick = () => {
+      setWx("Asking for this device's location…");
+      navigator.geolocation.getCurrentPosition(
+        (pos) => useLocation(pos.coords.latitude, pos.coords.longitude, null),
+        (err) => setWx("Could not get the location: " + err.message, "bad"),
+        { timeout: 15000 });
+    };
+  }
 
   form.addEventListener("input", (e) => {
     if (e.target.name === "tariff.transfer_mode") showMode();
