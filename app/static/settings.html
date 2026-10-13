@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Settings · Sähkövahti</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M18 2 6 18h8l-2 12 12-16h-8z' fill='%23eda100'/></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="settings-page">
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <button class="menu-btn" id="menuBtn" aria-label="Open menu" aria-controls="drawer" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M18 2 6 18h8l-2 12 12-16h-8z"/></svg>
+      <h1>Settings</h1>
+    </div>
+  </header>
+
+  <form id="form" class="settings" novalidate>
+    <div class="settings-main">
+      <p class="hint">Enter prices and fees <b>without VAT</b> ("alv 0 %"), as on your contract and invoices.
+        VAT is added on top of everything — spot, margin, transfer, electricity tax and basic fees. Saved settings are stored in the app's database and override <code>config.toml</code>.</p>
+
+      <fieldset class="panel">
+        <legend>Electricity contract <span class="muted">sähkösopimus</span></legend>
+        <label class="field wide">Electricity company
+          <input name="tariff.retailer_name" type="text" maxlength="80" placeholder="e.g. the company on your energy invoice"></label>
+        <label class="field">Margin <span class="unit">c/kWh</span>
+          <input name="tariff.retailer_margin_c_kwh" type="number" step="0.001" inputmode="decimal" required>
+          <small>"marginaali" on top of spot</small></label>
+        <label class="field">Basic fee <span class="unit">€/month</span>
+          <input name="tariff.retailer_monthly_eur" type="number" step="0.01" min="0" inputmode="decimal" required>
+          <small>perusmaksu, normal price</small></label>
+        <label class="field">Spot price discount <span class="unit">%</span>
+          <input name="tariff.spot_discount_percent" type="number" step="0.1" min="0" max="100" inputmode="decimal" required>
+          <small>30 = you pay 70 % of the spot price</small></label>
+        <label class="field">Discount valid until <span class="unit">optional</span>
+          <input name="tariff.discount_until" type="date">
+          <small>last day of the discount; empty = no end</small></label>
+        <label class="field">Intro basic fee <span class="unit">€/month, optional</span>
+          <input name="tariff.retailer_monthly_promo_eur" type="number" step="0.01" min="0" inputmode="decimal">
+          <small>discounted perusmaksu; empty = none</small></label>
+        <div class="field">Intro fee valid <span class="unit">optional</span>
+          <div class="hours-row">
+            <label>from <input name="tariff.retailer_monthly_promo_from" type="date" aria-label="Intro fee from"></label>
+            <label>to <input name="tariff.retailer_monthly_promo_until" type="date" aria-label="Intro fee until"></label>
+          </div>
+          <small>after this the normal basic fee applies</small></div>
+        <label class="check wide"><input name="tariff.negative_spot_as_zero" type="checkbox">
+          <span>Negative spot prices are billed as 0 c<small>The discount then applies only to positive prices.</small></span></label>
+      </fieldset>
+
+      <fieldset class="panel">
+        <legend>Grid / transfer <span class="muted">sähkönsiirto</span></legend>
+        <label class="field wide">Grid company
+          <input name="tariff.grid_company" type="text" maxlength="80" placeholder="e.g. the company on your transfer invoice"></label>
+        <div class="field wide" role="radiogroup" aria-labelledby="modeLabel">
+          <span id="modeLabel">Transfer product</span>
+          <div class="modes">
+            <label><input type="radio" name="tariff.transfer_mode" value="flat"><span><b>Flat</b> yleissiirto<small>Same price at all times</small></span></label>
+            <label><input type="radio" name="tariff.transfer_mode" value="day_night"><span><b>Day / night</b> aikasiirto<small>Cheaper at night, every day</small></span></label>
+            <label><input type="radio" name="tariff.transfer_mode" value="seasonal"><span><b>Seasonal</b> kausisiirto<small>Dearer on winter weekdays (Nov–Mar, Mon–Sat daytime)</small></span></label>
+          </div>
+        </div>
+        <label class="field" data-mode="flat">Transfer price <span class="unit">c/kWh</span>
+          <input name="tariff.transfer_c_kwh" type="number" step="0.001" inputmode="decimal" required>
+          <small>siirtomaksu, energia</small></label>
+        <label class="field" data-mode="day_night seasonal"><span data-peak-label>Day price</span> <span class="unit">c/kWh</span>
+          <input name="tariff.transfer_peak_c_kwh" type="number" step="0.001" inputmode="decimal" required></label>
+        <label class="field" data-mode="day_night seasonal"><span data-offpeak-label>Night price</span> <span class="unit">c/kWh</span>
+          <input name="tariff.transfer_offpeak_c_kwh" type="number" step="0.001" inputmode="decimal" required></label>
+        <div class="field hours" data-mode="day_night seasonal">
+          <span><span data-peak-label>Day price</span> applies</span>
+          <div class="hours-row">
+            <label>from <select name="tariff.peak_start_hour" aria-label="Peak starts at"></select></label>
+            <label>to <select name="tariff.peak_end_hour" aria-label="Peak ends at"></select></label>
+          </div>
+          <small>usually 07–22</small>
+        </div>
+        <label class="field">Basic fee <span class="unit">€/month</span>
+          <input name="tariff.grid_monthly_eur" type="number" step="0.01" min="0" inputmode="decimal" required>
+          <small>perusmaksu</small></label>
+        <label class="field">Electricity tax <span class="unit">c/kWh</span>
+          <input name="tariff.electricity_tax_c_kwh" type="number" step="0.001" inputmode="decimal" required>
+          <small>sähkövero without VAT, on the transfer invoice</small></label>
+      </fieldset>
+
+      <fieldset class="panel">
+        <legend>VAT <span class="muted">arvonlisävero</span></legend>
+        <label class="field">VAT <span class="unit">%</span>
+          <input name="tariff.vat_percent" type="number" step="0.1" min="0" max="100" inputmode="decimal" required>
+          <small>added to all prices and fees; 25.5 % in Finland</small></label>
+      </fieldset>
+
+      <fieldset class="panel">
+        <legend>Traffic light <span class="muted">front page · prices incl. VAT</span></legend>
+        <label class="field">Green below <span class="unit">c/kWh</span>
+          <input name="traffic_light.green_below" type="number" step="0.1" inputmode="decimal" required></label>
+        <label class="field">Red above <span class="unit">c/kWh</span>
+          <input name="traffic_light.red_above" type="number" step="0.1" inputmode="decimal" required></label>
+        <label class="field wide">Compare against
+          <select name="traffic_light.basis">
+            <option value="spot">Your spot price (after discount, incl. VAT)</option>
+            <option value="total">Your total price (incl. margin, transfer, tax &amp; VAT)</option>
+          </select></label>
+      </fieldset>
+    </div>
+
+    <aside class="settings-side">
+      <div class="panel preview" aria-live="polite">
+        <h2>Your price right now</h2>
+        <table id="breakdown"></table>
+        <p class="hint" id="previewNote">&nbsp;</p>
+      </div>
+      <div class="save-bar">
+        <p class="msg" id="msg" role="status">&nbsp;</p>
+        <button type="submit" class="primary" id="saveBtn">Save</button>
+        <button type="button" class="ghost" id="resetBtn">Reset to config.toml</button>
+        <div class="confirm" id="confirmReset" hidden>
+          <span>Discard saved settings?</span>
+          <button type="button" id="resetYes">Reset</button>
+          <button type="button" class="ghost" id="resetNo">Cancel</button>
+        </div>
+      </div>
+    </aside>
+  </form>
+</div>
+
+<nav class="drawer" id="drawer" aria-label="Views" hidden>
+  <div class="drawer-head"><strong>Sähkövahti</strong>
+    <button class="menu-btn" id="drawerClose" aria-label="Close menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <a href="/">Now<small>Traffic light, price and consumption</small></a>
+  <a href="/details">Details<small>Day charts, power history, cheapest windows, monthly totals</small></a>
+  <a href="/settings" aria-current="page">Settings<small>Your contract, transfer prices and traffic light</small></a>
+</nav>
+<div class="scrim" id="scrim" hidden></div>
+<script src="/static/nav.js"></script>
+<script src="/static/settings.js"></script>
+</body>
+</html>

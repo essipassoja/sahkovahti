@@ -17,20 +17,31 @@ from .meter import MeterService
 from .prices import PriceUpdater
 
 STATIC = Path(__file__).parent / "static"
-PAGES = {"/": "simple.html", "": "simple.html", "/details": "index.html"}
+PAGES = {"/": "simple.html", "": "simple.html", "/details": "index.html", "/settings": "settings.html"}
+SETTINGS_KEY = "settings"
 log = logging.getLogger("http")
 
 
 class App:
     def __init__(self, cfg: Config, db: DB, meter: MeterService, prices: PriceUpdater):
         self.cfg, self.db, self.meter, self.prices = cfg, db, meter, prices
+        try:
+            cfg.apply(self._saved_settings())
+        except (TypeError, ValueError) as e:
+            log.warning("ignoring saved settings (%s); using config.toml values", e)
+
+    def _saved_settings(self) -> dict:
+        raw = self.db.get_meta(SETTINGS_KEY)
+        return json.loads(raw) if raw else {}
 
     # ---------------- endpoints ----------------
     def live(self, _q):
         r = self.meter.latest
         now = int(time.time())
         spot = self.db.price_at(now)
-        total = self.cfg.tariff.total_c_kwh(spot)
+        tariff = self.cfg.tariff
+        total = tariff.total_c_kwh(spot, now)
+        energy = tariff.energy_c_kwh(spot, now)
         q_start = now - now % QUARTER
         nxt = self.db.price_at(q_start + QUARTER)
         today = datetime.now(self.cfg.tz).date()
@@ -44,6 +55,7 @@ class App:
             "import_kwh": r.import_kwh if r else None,
             "phases": {k: v for k, v in (r.extra or {}).items() if k[:1] == "l"} if r else {},
             "spot": spot,
+            "energy": round(energy, 3) if energy is not None else None,
             "total": round(total, 3) if total is not None else None,
             "next_spot": nxt,
             "cost_rate_eur_h": round(p / 1000 * total / 100, 3) if p is not None and total is not None else None,
@@ -82,6 +94,7 @@ class App:
 
     def status(self, _q):
         t = self.cfg.tariff
+        now = int(time.time())
         return {
             "meter": self.meter.status(),
             "prices": {
@@ -90,24 +103,75 @@ class App:
                 "known_until": self.db.last_price_end(),
             },
             "tariff": {
-                "retailer_margin_c_kwh": t.retailer_margin_c_kwh,
-                "transfer_c_kwh": t.transfer_c_kwh,
-                "electricity_tax_c_kwh": t.electricity_tax_c_kwh,
-                "adders_c_kwh": round(t.adders_c_kwh, 3),
-                "monthly_fixed_eur": t.monthly_fixed_eur,
+                **t.as_dict(),
+                "adders_c_kwh": round(t.adders_c_kwh(now), 3),
+                "discount_active": t.discount_active(now),
+                "monthly_fixed_eur": round(t.monthly_fixed_eur(datetime.now(self.cfg.tz).date()), 2),
             },
             "timezone": str(self.cfg.tz),
             "readings": self.db.reading_count(),
         }
 
-    def refresh_prices(self, _q):
+    def refresh_prices(self, _q, _body=None):
         return {"stored": self.prices.refresh()}
+
+    # ---------------- settings ----------------
+    def settings(self, _q):
+        return {
+            "values": {"tariff": self.cfg.tariff.as_dict(), "traffic_light": self.cfg.light.as_dict()},
+            "saved": self._saved_settings(),
+            "now": self._preview(self.cfg.tariff, self.cfg.light),
+        }
+
+    def _overrides(self, body) -> dict:
+        if not isinstance(body, dict):
+            raise ValueError("expected a JSON object")
+        return {k: body[k] for k in ("tariff", "traffic_light") if isinstance(body.get(k), dict)}
+
+    def _preview(self, tariff, light) -> dict:
+        now = int(time.time())
+        spot = self.db.price_at(now)
+        b = tariff.breakdown(spot, now)
+        today = datetime.now(self.cfg.tz).date()
+        b["monthly_fixed_eur"] = round(tariff.monthly_fixed_eur(today), 2)
+        b["retailer_monthly_now"] = tariff.retailer_monthly_at(today)
+        b["intro_fee_active"] = (tariff.retailer_monthly_promo_eur is not None
+                                 and b["retailer_monthly_now"] == tariff.retailer_monthly_promo_eur)
+        b["light"] = light.level(tariff.energy_c_kwh(spot, now) if light.basis == "spot" else b["total"])
+        return b
+
+    def preview_settings(self, _q, body):
+        try:
+            tariff, light = self.cfg.build(self._overrides(body))
+        except TypeError as e:
+            raise ValueError(str(e)) from None
+        return self._preview(tariff, light)
+
+    def save_settings(self, _q, body):
+        o = self._overrides(body)
+        try:
+            self.cfg.build(o)          # validate before storing anything
+        except TypeError as e:
+            raise ValueError(str(e)) from None
+        self.db.set_meta(SETTINGS_KEY, json.dumps(o))
+        self.cfg.apply(o)
+        log.info("settings saved")
+        return self.settings(None)
+
+    def reset_settings(self, _q, _body=None):
+        self.db.set_meta(SETTINGS_KEY, "{}")
+        self.cfg.apply({})
+        return self.settings(None)
 
     ROUTES = {
         "/api/live": "live", "/api/day": "day", "/api/history": "history",
         "/api/power": "power", "/api/cheapest": "cheapest", "/api/status": "status",
+        "/api/settings": "settings",
     }
-    POST_ROUTES = {"/api/prices/refresh": "refresh_prices"}
+    POST_ROUTES = {
+        "/api/prices/refresh": "refresh_prices", "/api/settings": "save_settings",
+        "/api/settings/preview": "preview_settings", "/api/settings/reset": "reset_settings",
+    }
 
 
 def make_handler(app: App):
@@ -128,13 +192,25 @@ def make_handler(app: App):
         def _json(self, code, obj):
             self._send(code, json.dumps(obj).encode(), "application/json")
 
-        def _dispatch(self, routes):
+        def _body(self):
+            n = int(self.headers.get("Content-Length") or 0)
+            if n > 65536:
+                raise ValueError("request body too large")
+            raw = self.rfile.read(n) if n else b""
+            try:
+                return json.loads(raw) if raw.strip() else {}
+            except json.JSONDecodeError:
+                raise ValueError("request body is not valid JSON") from None
+
+        def _dispatch(self, routes, post=False):
             u = urlparse(self.path)
             name = routes.get(u.path)
             if not name:
                 return False
             try:
-                self._json(200, getattr(app, name)(parse_qs(u.query)))
+                q = parse_qs(u.query)
+                fn = getattr(app, name)
+                self._json(200, fn(q, self._body()) if post else fn(q))
             except ValueError as e:
                 self._json(400, {"error": str(e)})
             except Exception as e:
@@ -156,7 +232,12 @@ def make_handler(app: App):
             self._send(200, f.read_bytes(), ctype, "no-cache")
 
         def do_POST(self):
-            if not self._dispatch(app.POST_ROUTES):
+            # JSON-only: browsers can't send that cross-site without a CORS preflight (which we
+            # never answer), so a random web page can't change settings on your home network.
+            ctype = (self.headers.get("Content-Type") or "").split(";")[0].strip().lower()
+            if urlparse(self.path).path.startswith("/api/settings") and ctype != "application/json":
+                return self._json(415, {"error": "Content-Type must be application/json"})
+            if not self._dispatch(app.POST_ROUTES, post=True):
                 self._send(404, b"not found", "text/plain")
 
     return Handler

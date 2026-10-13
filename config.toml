@@ -14,25 +14,51 @@ refresh_minutes = 30
 # porssisahko.net publishes prices with Finnish VAT (25.5 %) included.
 # If you switch to a source that gives VAT-free prices, set this to false.
 prices_include_vat = true
-vat_percent = 25.5
+vat_percent = 25.5        # VAT used by the price source — your own VAT rate is in [tariff]
 # Optional: load prices from a local JSON file instead (same format as the API). Useful offline.
 # fixture_file = "tests/fixtures/prices_sample.json"
 
 [tariff]
-# What you actually pay on top of spot. Check your contract and grid company invoice.
-# All values INCLUDING VAT.
-retailer_margin_c_kwh = 0.49     # your electricity company's margin ("marginaali")
-transfer_c_kwh        = 4.00     # grid transfer fee ("siirtomaksu, energia")
-electricity_tax_c_kwh = 2.827    # electricity tax (sähkövero) incl. VAT — CHECK your invoice, the rate changes with budgets
-monthly_fixed_eur     = 0.0      # basic fees (perusmaksut) — shown in monthly totals only
+# Defaults for your contract. Easier: edit these on the Settings page (menu → Settings) —
+# values saved there override this section until you press "Reset to config.toml".
+# All prices in c/kWh and fees in €/month WITHOUT VAT ("alv 0 %"); vat_percent is added on top of everything.
+
+# --- electricity contract (sähkösopimus) ---
+retailer_name         = ""
+retailer_margin_c_kwh = 0.39     # your electricity company's margin ("marginaali")
+spot_discount_percent = 0.0      # e.g. 30 = you pay 70 % of the spot price ("-30 % pörssisähköstä")
+discount_until        = ""       # last day of the discount, "YYYY-MM-DD"; "" = no end date
+negative_spot_as_zero = false    # true if negative spot prices are billed as 0
+retailer_monthly_eur  = 0.0      # retailer basic fee (perusmaksu), €/month — normal price
+# Optional introductory basic fee, e.g. 0 €/month for the first 6 months. Leave out for none.
+# retailer_monthly_promo_eur   = 0.0
+retailer_monthly_promo_from  = ""   # first day, "YYYY-MM-DD"; "" = from the start
+retailer_monthly_promo_until = ""   # last day; after it the normal fee applies
+
+# --- grid / transfer (sähkönsiirto) ---
+grid_company          = ""
+# flat      = yleissiirto: one price all the time (transfer_c_kwh)
+# day_night = aikasiirto: peak price between peak_start_hour and peak_end_hour every day
+# seasonal  = kausisiirto: peak price Nov–Mar, Mon–Sat between those hours; other times off-peak
+transfer_mode          = "flat"
+transfer_c_kwh         = 3.19    # flat transfer price ("siirtomaksu, energia")
+transfer_peak_c_kwh    = 0.0     # day / winter weekday price
+transfer_offpeak_c_kwh = 0.0     # night / other time price
+peak_start_hour        = 7
+peak_end_hour          = 22
+grid_monthly_eur       = 0.0     # grid basic fee (perusmaksu), €/month
+
+electricity_tax_c_kwh = 2.253    # electricity tax (sähkövero), class I, without VAT — the rate changes with budgets
+vat_percent           = 25.5     # VAT (arvonlisävero), added to spot, margin, transfer, tax and basic fees
 
 [traffic_light]
 # The front page shows green / yellow / red: is now a good time to run big loads
 # (sauna, EV charging, laundry, dishwasher)? Thresholds in c/kWh.
 green_below = 5.0      # cheaper than this → green
 red_above   = 15.0     # more expensive than this → red; in between → yellow
-# "spot"  = compare the spot price incl. VAT (what most Finnish price apps show)
-# "total" = compare spot + margin + transfer + tax (raise the thresholds by ~7 c if you use this)
+# Thresholds are compared INCLUDING VAT, like the prices most Finnish apps show.
+# "spot"  = your spot price incl. VAT, after your discount (what you pay for the energy itself)
+# "total" = that + margin + transfer + tax (raise the thresholds by ~7 c if you use this)
 basis = "spot"
 
 [meter]

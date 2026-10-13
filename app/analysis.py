@@ -28,11 +28,13 @@ def slots(t0: int, t1: int, cfg: Config, db: DB) -> list[dict]:
     out = []
     for i, s in enumerate(boundaries[:-1]):
         spot = prices.get(s)
-        total = cfg.tariff.total_c_kwh(spot)
+        total = cfg.tariff.total_c_kwh(spot, s)
+        energy = cfg.tariff.energy_c_kwh(spot, s)
         k = kwh[i] if i < len(kwh) else None
         out.append({
             "start": s,
             "spot": spot,
+            "energy": round(energy, 3) if energy is not None else None,   # your spot part after discount
             "total": round(total, 3) if total is not None else None,
             "kwh": round(k, 4) if k is not None else None,
             "export_kwh": round(exp[i], 4) if i < len(exp) and exp[i] else None,
@@ -93,13 +95,15 @@ def month_to_date(cfg: Config, db: DB) -> dict:
     t0, _ = day_bounds(first, cfg)
     _, t1 = day_bounds(today, cfg)
     s = summarize(slots(t0, t1, cfg, db), cfg)
-    s["fixed_eur"] = cfg.tariff.monthly_fixed_eur
+    s["fixed_eur"] = round(cfg.tariff.monthly_fixed_eur(today), 2)
     s["month"] = first.strftime("%Y-%m")
     return s
 
 
 def cheapest_windows(cfg: Config, db: DB, hours=(1, 2, 3, 4)) -> list[dict]:
-    """Cheapest contiguous windows from the current quarter onward (known prices only)."""
+    """Cheapest contiguous windows from the current quarter onward (known prices only).
+
+    Ranked by your total price, so a cheaper night transfer price counts too."""
     now = int(time.time())
     q0 = now - now % QUARTER
     rows = db.prices_between(q0, q0 + 3 * 86400)
@@ -107,7 +111,7 @@ def cheapest_windows(cfg: Config, db: DB, hours=(1, 2, 3, 4)) -> list[dict]:
     for s, e, p in rows:
         for q in range(s, e, QUARTER):
             if q >= q0:
-                series.append((q, p))
+                series.append((q, p, cfg.tariff.total_c_kwh(p, q)))
     # require contiguity
     out = []
     for h in hours:
@@ -116,13 +120,13 @@ def cheapest_windows(cfg: Config, db: DB, hours=(1, 2, 3, 4)) -> list[dict]:
         for i in range(len(series) - n + 1):
             if series[i + n - 1][0] - series[i][0] != (n - 1) * QUARTER:
                 continue
-            avg = sum(p for _, p in series[i:i + n]) / n
-            if best is None or avg < best[1]:
-                best = (series[i][0], avg)
+            win = series[i:i + n]
+            avg_total = sum(t for _, _, t in win) / n
+            if best is None or avg_total < best[2]:
+                best = (series[i][0], sum(p for _, p, _ in win) / n, avg_total)
         if best:
             out.append({"hours": h, "start": best[0], "end": best[0] + n * QUARTER,
-                        "avg_spot": round(best[1], 3),
-                        "avg_total": round(cfg.tariff.total_c_kwh(best[1]), 3)})
+                        "avg_spot": round(best[1], 3), "avg_total": round(best[2], 3)})
     return out
 
 
@@ -135,7 +139,8 @@ def traffic_light(cfg: Config, db: DB, now: int | None = None) -> dict:
     for s, e, p in db.prices_between(q0, q0 + 2 * 86400):
         for q in range(s, e, QUARTER):
             if q >= q0:
-                price = p if tl.basis == "spot" else cfg.tariff.total_c_kwh(p)
+                price = (cfg.tariff.energy_c_kwh(p, q) if tl.basis == "spot"
+                         else cfg.tariff.total_c_kwh(p, q))
                 series.append((q, price))
     series.sort()
     if not series or series[0][0] != q0:

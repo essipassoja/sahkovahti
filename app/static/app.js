@@ -29,7 +29,9 @@
       const s = await get("/api/status");
       state.status = s;
       state.tz = s.timezone || state.tz;
-      $("adders").textContent = num(s.tariff.adders_c_kwh, f2);
+      const t = s.tariff;
+      $("adders").textContent = num(t.adders_c_kwh, f2) + " c" +
+        (t.discount_active ? ` (and you get −${num(t.spot_discount_percent, f0)} % off spot)` : "");
       const st = $("status"), m = s.meter;
       st.className = "status " + (m.simulated ? "sim" : m.connected ? "ok" : "bad");
       $("statusText").textContent = m.simulated ? "Simulator" : m.connected ? `Meter connected (${m.source})` : `Meter offline${m.error ? " — " + m.error : ""}`;

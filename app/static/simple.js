@@ -57,7 +57,7 @@
     }
     $("nextChange").textContent = next || " ";
 
-    const basis = L.basis === "spot" ? "spot price" : "total price";
+    const basis = L.basis === "spot" ? "your spot price" : "your total price";
     $("legend").textContent = `Based on ${basis}${L.price != null ? ` (now ${num(L.price, f2)} c/kWh)` : ""}: ` +
       `green under ${num(L.green_below, f0)} c · red over ${num(L.red_above, f0)} c`;
   }
@@ -68,7 +68,9 @@
     renderLight(d.light);
 
     $("priceNow").textContent = num(d.total, f1);
-    $("priceSub").textContent = d.spot != null ? `spot ${num(d.spot, f2)} c + transfer, tax & margin` : "no price for this slot";
+    $("priceSub").textContent = d.spot == null ? "no price for this slot"
+      : Math.abs(d.energy - d.spot) > 0.0005 ? `spot ${num(d.spot, f2)} c → ${num(d.energy, f2)} c for you, + transfer, tax & margin`
+      : `spot ${num(d.spot, f2)} c + transfer, tax & margin`;
 
     const p = d.power_w;
     if (p != null) {

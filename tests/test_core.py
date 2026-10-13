@@ -9,6 +9,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from app.analysis import traffic_light  # noqa: E402
+from datetime import date, datetime  # noqa: E402
+from zoneinfo import ZoneInfo  # noqa: E402
+
 from app.config import Config, Tariff, TrafficLight  # noqa: E402
 from app.db import DB  # noqa: E402
 from app.meter.base import Reading  # noqa: E402
@@ -153,8 +156,137 @@ class TrafficLightTests(unittest.TestCase):
 
     def test_total_basis_adds_tariff(self):
         r = self._run([3], light=TrafficLight(basis="total"), tariff=Tariff(transfer_c_kwh=4))
-        self.assertEqual(r["level"], "yellow")   # 3 + 4 = 7 c
-        self.assertAlmostEqual(r["price"], 7)
+        self.assertEqual(r["level"], "yellow")   # 3 c + 4 c transfer × 1.255 VAT = 8.02 c
+        self.assertAlmostEqual(r["price"], 8.02)
+
+
+HEL = ZoneInfo("Europe/Helsinki")
+
+
+def ts(*args):
+    return datetime(*args, tzinfo=HEL).timestamp()
+
+
+class TariffTests(unittest.TestCase):
+    def test_discount_and_negative_as_zero(self):
+        t = Tariff(spot_discount_percent=30, negative_spot_as_zero=True, tz=HEL)
+        now = ts(2026, 10, 13, 12)
+        self.assertAlmostEqual(t.energy_c_kwh(10, now), 7)
+        self.assertEqual(t.energy_c_kwh(-5, now), 0)
+        self.assertAlmostEqual(Tariff(spot_discount_percent=30).energy_c_kwh(-5, now), -3.5)
+        self.assertIsNone(t.energy_c_kwh(None, now))
+
+    def test_discount_until_is_inclusive_local_date(self):
+        t = Tariff(spot_discount_percent=30, discount_until="2026-10-31", tz=HEL)
+        self.assertAlmostEqual(t.energy_c_kwh(10, ts(2026, 10, 31, 23, 45)), 7)
+        self.assertAlmostEqual(t.energy_c_kwh(10, ts(2026, 11, 1, 0, 0)), 10)
+
+    def test_total(self):
+        t = Tariff(spot_discount_percent=30, retailer_margin_c_kwh=0.5, transfer_c_kwh=4,
+                   electricity_tax_c_kwh=2.827, tz=HEL)
+        # stored spot includes VAT; margin, transfer and tax are entered without VAT
+        self.assertAlmostEqual(t.total_c_kwh(10, ts(2026, 10, 13, 12)), 7 + (0.5 + 4 + 2.827) * 1.255)
+
+    def test_vat_percent(self):
+        now = ts(2026, 10, 13, 12)
+        t = Tariff(vat_percent=24, retailer_margin_c_kwh=1, tz=HEL)
+        self.assertAlmostEqual(t.energy_c_kwh(12.55, now), 10 * 1.24)   # 12.55 c incl. 25.5 % = 10 c
+        self.assertAlmostEqual(t.total_c_kwh(12.55, now), 11 * 1.24)
+        t0 = Tariff(vat_percent=0, retailer_monthly_eur=4, grid_monthly_eur=6, tz=HEL)
+        self.assertAlmostEqual(t0.total_c_kwh(12.55, now), 10)
+        self.assertAlmostEqual(Tariff(retailer_monthly_eur=4, grid_monthly_eur=6).monthly_fixed_eur(date(2026, 10, 1)), 12.55)
+
+    def test_intro_basic_fee(self):
+        t = Tariff(retailer_monthly_eur=4, retailer_monthly_promo_eur=0, retailer_monthly_promo_from="2026-10-01",
+                   retailer_monthly_promo_until="2027-03-31", vat_percent=0)
+        self.assertEqual(t.retailer_monthly_at(date(2026, 9, 30)), 4)
+        self.assertEqual(t.retailer_monthly_at(date(2026, 10, 1)), 0)
+        self.assertEqual(t.retailer_monthly_at(date(2027, 3, 31)), 0)
+        self.assertEqual(t.retailer_monthly_at(date(2027, 4, 1)), 4)
+        no_promo = Tariff(retailer_monthly_eur=4, retailer_monthly_promo_eur="", retailer_monthly_promo_until="2027-01-01")
+        self.assertEqual(no_promo.retailer_monthly_at(date(2026, 10, 1)), 4)   # dates alone do nothing
+        with self.assertRaises(ValueError):
+            Tariff(retailer_monthly_promo_eur=1, retailer_monthly_promo_from="2027-01-01",
+                   retailer_monthly_promo_until="2026-01-01")
+
+    def test_breakdown_adds_up(self):
+        t = Tariff(spot_discount_percent=30, retailer_margin_c_kwh=0.39, transfer_c_kwh=3.19,
+                   electricity_tax_c_kwh=2.253, tz=HEL)
+        b = t.breakdown(25.1, ts(2026, 10, 13, 12))
+        self.assertAlmostEqual(b["spot"], 20, places=3)
+        self.assertAlmostEqual(b["energy"] + b["margin"] + b["transfer"] + b["tax"] + b["vat"], b["total"], places=2)
+
+    def test_day_night_transfer(self):
+        t = Tariff(transfer_mode="day_night", transfer_peak_c_kwh=5, transfer_offpeak_c_kwh=2, tz=HEL)
+        self.assertEqual(t.transfer_at(ts(2026, 10, 13, 6, 45)), 2)
+        self.assertEqual(t.transfer_at(ts(2026, 10, 13, 7, 0)), 5)
+        self.assertEqual(t.transfer_at(ts(2026, 10, 13, 21, 45)), 5)
+        self.assertEqual(t.transfer_at(ts(2026, 10, 13, 22, 0)), 2)
+
+    def test_hours_wrapping_midnight(self):
+        t = Tariff(transfer_mode="day_night", peak_start_hour=22, peak_end_hour=6,
+                   transfer_peak_c_kwh=1, transfer_offpeak_c_kwh=9, tz=HEL)
+        self.assertEqual(t.transfer_at(ts(2026, 10, 13, 23)), 1)
+        self.assertEqual(t.transfer_at(ts(2026, 10, 14, 5)), 1)
+        self.assertEqual(t.transfer_at(ts(2026, 10, 14, 12)), 9)
+
+    def test_seasonal_transfer(self):
+        t = Tariff(transfer_mode="seasonal", transfer_peak_c_kwh=5, transfer_offpeak_c_kwh=2, tz=HEL)
+        self.assertEqual(t.transfer_at(ts(2026, 10, 13, 12)), 2)   # October
+        self.assertEqual(t.transfer_at(ts(2026, 12, 12, 12)), 5)   # Saturday in December
+        self.assertEqual(t.transfer_at(ts(2026, 12, 13, 12)), 2)   # Sunday
+        self.assertEqual(t.transfer_at(ts(2026, 12, 14, 23)), 2)   # Monday night
+        self.assertEqual(t.transfer_at(ts(2027, 3, 31, 12)), 5)    # last winter day
+
+    def test_validation(self):
+        for bad in ({"spot_discount_percent": 120}, {"discount_until": "31.12.2026"},
+                    {"transfer_mode": "cheap"}, {"peak_start_hour": 7.5}, {"retailer_margin_c_kwh": None},
+                    {"transfer_mode": "day_night", "peak_start_hour": 7, "peak_end_hour": 7}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                Tariff(**bad)
+
+
+class SettingsTests(unittest.TestCase):
+    def _cfg(self):
+        return Config(raw={"tariff": {"transfer_c_kwh": 4.0}, "traffic_light": {}}, tz=HEL,
+                      db_path=None, host="", port=0, tariff=Tariff(transfer_c_kwh=4.0, tz=HEL))
+
+    def test_overrides_merge_with_config_toml(self):
+        cfg = self._cfg()
+        cfg.apply({"tariff": {"spot_discount_percent": 30}, "traffic_light": {"green_below": 3}})
+        self.assertEqual(cfg.tariff.spot_discount_percent, 30)
+        self.assertEqual(cfg.tariff.transfer_c_kwh, 4.0)       # kept from config.toml
+        self.assertEqual(cfg.light.green_below, 3)
+        cfg.apply({})
+        self.assertEqual(cfg.tariff.spot_discount_percent, 0)
+
+    def test_unknown_key_rejected(self):
+        with self.assertRaises(ValueError):
+            self._cfg().build({"tariff": {"tz": "UTC"}})
+
+    def test_save_persists_and_invalid_is_not_stored(self):
+        from app.server import App
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            db = DB(Path(d) / "t.db")
+            app = App(self._cfg(), db, None, None)
+            app.save_settings({}, {"tariff": {"spot_discount_percent": 30}})
+            with self.assertRaises(ValueError):
+                app.save_settings({}, {"tariff": {"spot_discount_percent": 300}})
+            self.assertEqual(app.cfg.tariff.spot_discount_percent, 30)
+            fresh = App(self._cfg(), db, None, None)               # restart: settings come back
+            self.assertEqual(fresh.cfg.tariff.spot_discount_percent, 30)
+            fresh.reset_settings({})
+            self.assertEqual(App(self._cfg(), db, None, None).cfg.tariff.spot_discount_percent, 0)
+
+    def test_traffic_light_uses_discounted_spot(self):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            db = DB(Path(d) / "t.db")
+            db.upsert_prices([(0, 900, 6.0)])
+            cfg = self._cfg()
+            cfg.apply({"tariff": {"spot_discount_percent": 30}})
+            r = traffic_light(cfg, db, now=100)
+            self.assertEqual(r["level"], "green")                 # 6 c × 0.7 = 4.2 c < 5 c
+            self.assertAlmostEqual(r["price"], 4.2)
 
 
 if __name__ == "__main__":

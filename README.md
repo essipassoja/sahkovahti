@@ -31,14 +31,23 @@ On first start the simulator generates 14 days of fake history so the charts hav
 
 ## Configure your tariff
 
-Edit `config.toml` → `[tariff]` with the numbers from your invoices (all **including VAT**):
+Open **menu → Settings** (`/settings`) and enter the numbers from your contract and invoices
+**without VAT** ("alv 0 %"). VAT (25.5 % by default) is added on top of everything. A live breakdown shows what you pay right now, so you can check it against your bill.
 
 | Setting | Where to find it |
 |---|---|
-| `retailer_margin_c_kwh` | your spot contract's margin ("marginaali") |
-| `transfer_c_kwh` | grid company invoice, energy part of transfer ("siirtomaksu") |
-| `electricity_tax_c_kwh` | grid invoice ("sähkövero") — the rate changes with state budgets, check it |
-| `monthly_fixed_eur` | basic fees, both invoices together |
+| Margin | your spot contract's margin ("marginaali") |
+| Spot price discount | e.g. "−30 % pörssisähkön hinnasta"; optional end date for intro offers |
+| Negative prices billed as 0 | your contract terms; the discount then applies only to positive prices |
+| Transfer product | flat (yleissiirto), day/night (aikasiirto) or seasonal (kausisiirto: Nov–Mar, Mon–Sat daytime) |
+| Transfer prices | grid company invoice, energy part of transfer ("siirtomaksu") |
+| Electricity tax | grid invoice ("sähkövero") — the rate changes with state budgets, check it |
+| VAT | 25.5 % in Finland; applied to spot, margin, transfer, electricity tax and basic fees |
+| Basic fees | "perusmaksu" on both invoices |
+
+Settings are stored in the app's database and override `[tariff]` / `[traffic_light]` in `config.toml`,
+which act as defaults ("Reset to config.toml" on the settings page goes back to them). The settings
+page has no password, so anyone on your home network can change it; it holds no personal data.
 
 Prices come from [porssisahko.net](https://porssisahko.net) (Nord Pool day‑ahead, 15‑min slots since
 1 Oct 2025, VAT 25.5 % included). Tomorrow's prices are published around 14:00; the app polls
@@ -105,6 +114,8 @@ All JSON, handy for Home Assistant or your own scripts:
 | `GET /api/cheapest` | cheapest upcoming 1–4 h windows |
 | `GET /api/status` | meter/price status, tariff |
 | `POST /api/prices/refresh` | fetch prices now |
+| `GET /api/settings` | current tariff & traffic light settings, price breakdown now |
+| `POST /api/settings` | save settings (JSON body `{"tariff": {...}, "traffic_light": {...}}`, `Content-Type: application/json`) |
 
 ## Project layout
 
