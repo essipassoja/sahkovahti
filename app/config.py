@@ -144,19 +144,20 @@ class Tariff:
         """Stored spot prices include VAT; this is the VAT-free market price."""
         return None if spot_c_kwh is None else spot_c_kwh / (1 + self.stored_spot_vat_percent / 100)
 
-    def _energy_ex_vat(self, spot_c_kwh: float | None, ts: float) -> float | None:
+    def _energy_ex_vat(self, spot_c_kwh: float | None, ts: float, discount: bool = True) -> float | None:
         e = self.spot_ex_vat(spot_c_kwh)
         if e is None:
             return None
         if self.negative_spot_as_zero:
             e = max(e, 0.0)
-        if self.discount_active(ts):
+        if discount and self.discount_active(ts):
             e *= 1 - self.spot_discount_percent / 100
         return e
 
-    def energy_c_kwh(self, spot_c_kwh: float | None, ts: float) -> float | None:
-        """Your spot part incl. VAT: after the 'negative = 0' rule and your discount."""
-        e = self._energy_ex_vat(spot_c_kwh, ts)
+    def energy_c_kwh(self, spot_c_kwh: float | None, ts: float, discount: bool = True) -> float | None:
+        """Your spot part incl. VAT: after the 'negative = 0' rule and your discount
+        (discount=False: what it would be without the discount)."""
+        e = self._energy_ex_vat(spot_c_kwh, ts, discount)
         return None if e is None else e * self.vat_factor
 
     def transfer_period(self, ts: float) -> str:
@@ -179,9 +180,9 @@ class Tariff:
         """Margin + transfer + electricity tax at time ts, incl. VAT."""
         return (self.retailer_margin_c_kwh + self.transfer_at(ts) + self.electricity_tax_c_kwh) * self.vat_factor
 
-    def total_c_kwh(self, spot_c_kwh: float | None, ts: float) -> float | None:
-        """What you pay per kWh, incl. VAT."""
-        e = self.energy_c_kwh(spot_c_kwh, ts)
+    def total_c_kwh(self, spot_c_kwh: float | None, ts: float, discount: bool = True) -> float | None:
+        """What you pay per kWh, incl. VAT (discount=False: without your spot discount)."""
+        e = self.energy_c_kwh(spot_c_kwh, ts, discount)
         return None if e is None else e + self.adders_c_kwh(ts)
 
     def breakdown(self, spot_c_kwh: float | None, ts: float) -> dict:

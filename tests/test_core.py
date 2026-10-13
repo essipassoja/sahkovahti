@@ -176,6 +176,8 @@ class TariffTests(unittest.TestCase):
         self.assertEqual(t.energy_c_kwh(-5, now), 0)
         self.assertAlmostEqual(Tariff(spot_discount_percent=30).energy_c_kwh(-5, now), -3.5)
         self.assertIsNone(t.energy_c_kwh(None, now))
+        self.assertAlmostEqual(t.energy_c_kwh(10, now, discount=False), 10)
+        self.assertEqual(t.energy_c_kwh(-5, now, discount=False), 0)
 
     def test_discount_until_is_inclusive_local_date(self):
         t = Tariff(spot_discount_percent=30, discount_until="2026-10-31", tz=HEL)

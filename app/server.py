@@ -50,6 +50,8 @@ class App:
         spot = analysis.spot_at(now, tariff, self.db)
         total = tariff.total_c_kwh(spot, now)
         energy = tariff.energy_c_kwh(spot, now)
+        discounted = tariff.discount_active(now)
+        total_full = tariff.total_c_kwh(spot, now, discount=False) if discounted else total
         step = tariff.slot_s
         slot_start = now - now % step
         nxt = analysis.spot_at(slot_start + step, tariff, self.db)
@@ -66,6 +68,8 @@ class App:
             "spot": spot,
             "energy": round(energy, 3) if energy is not None else None,
             "total": round(total, 3) if total is not None else None,
+            "total_full": round(total_full, 3) if total_full is not None else None,
+            "discount_percent": tariff.spot_discount_percent if discounted else 0,
             "next_spot": nxt,
             "cost_rate_eur_h": round(p / 1000 * total / 100, 3) if p is not None and total is not None else None,
             "slot_s": step,

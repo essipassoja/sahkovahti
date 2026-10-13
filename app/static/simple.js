@@ -67,10 +67,18 @@
     try { d = await get("/api/live"); } catch { return; }
     renderLight(d.light);
 
+    // spot: with a discount, your discounted price big and the market spot price small;
+    // without one, just the market spot price
+    const disc = d.discount_percent || 0;
+    $("spotLabel").textContent = disc ? `Spot price now (−${num(disc, f0)} %)` : "Spot price now";
+    $("spotNow").textContent = num(disc ? d.energy : d.spot, f2);
+    $("spotSub").textContent = d.spot == null ? "no price for this slot"
+      : disc ? `market spot ${num(d.spot, f2)} c/kWh` : "market spot, incl. VAT";
+
     $("priceNow").textContent = num(d.total, f1);
     $("priceSub").textContent = d.spot == null ? "no price for this slot"
-      : Math.abs(d.energy - d.spot) > 0.0005 ? `spot ${num(d.spot, f2)} c → ${num(d.energy, f2)} c for you, + transfer, tax & margin`
-      : `spot ${num(d.spot, f2)} c + transfer, tax & margin`;
+      : disc && d.total_full != null ? `${num(d.total_full, f1)} c without discount · incl. transfer, tax & margin`
+      : "spot + transfer, tax & margin";
 
     const p = d.power_w;
     if (p != null) {
