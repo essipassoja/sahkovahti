@@ -10,7 +10,8 @@ A small local web app that shows your household's electricity use next to the Fi
 - Works in light & dark mode, on phone and desktop, from any device on your home network
 
 It runs with **only Python 3.11+ — no packages to install** (pyserial is needed only if the HAN
-cable plugs straight into the computer running the app). Until your HAN hardware is installed,
+cable plugs straight into the computer running the app; on **Windows** also run
+`pip install tzdata`, since Windows has no built-in time zone database). Until your HAN hardware is installed,
 it runs on a realistic **simulated house** with **real prices**.
 
 Done using Claude.
