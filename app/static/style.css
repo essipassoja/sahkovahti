@@ -223,8 +223,8 @@ button.ghost { background: transparent; }
   .light-card[data-level="yellow"] { border-top-color: var(--lamp-yellow); }
   .light-card[data-level="red"]    { border-top-color: var(--lamp-red); }
   .light-card[data-level] { border-left-color: var(--border); }
-  .lamps { flex-direction: row; padding: 10px 14px; }
-  .lamp { width: 52px; height: 52px; }
+  .lamps { flex-direction: row; padding: 8px 11px; }
+  .lamp { width: 40px; height: 40px; }
   .verdict h2 { font-size: 25px; }
   .verdict p { font-size: 15px; }
   .big-tiles { grid-template-columns: 1fr; gap: 12px; }
