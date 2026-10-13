@@ -5,6 +5,7 @@ values are stored in the database and override the [tariff] / [traffic_light] se
 """
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass, field, fields
 from datetime import date, datetime
@@ -220,6 +221,60 @@ class TrafficLight:
 
 
 @dataclass
+class Notifications:
+    """Phone notifications through ntfy (https://ntfy.sh): install the ntfy app, subscribe to the topic."""
+    enabled: bool = False
+    server: str = "https://ntfy.sh"
+    topic: str = ""                # random-looking name; anyone who knows it can read the messages
+    on_green: bool = True          # light turns green
+    on_red: bool = False           # light turns red
+    min_minutes: int = 30          # skip green/red periods shorter than this
+    quiet_enabled: bool = False
+    quiet_start_hour: int = 22
+    quiet_end_hour: int = 7
+    click_url: str = ""            # opened when you tap the notification, e.g. http://192.168.1.20:8080
+
+    def __post_init__(self):
+        for f in ("enabled", "on_green", "on_red", "quiet_enabled"):
+            if not isinstance(getattr(self, f), bool):
+                raise ValueError(f"{f} must be true or false")
+        self.server = str(self.server or "").strip().rstrip("/") or "https://ntfy.sh"
+        if not re.match(r"^https?://[^\s/]+", self.server):
+            raise ValueError("server must start with http:// or https://")
+        self.topic = str(self.topic or "").strip()
+        if self.topic and not re.fullmatch(r"[A-Za-z0-9_-]{1,64}", self.topic):
+            raise ValueError("topic may only contain letters, digits, - and _ (max 64)")
+        if self.enabled and not self.topic:
+            raise ValueError("topic is needed when notifications are on")
+        self.click_url = str(self.click_url or "").strip()
+        if self.click_url and not re.match(r"^https?://", self.click_url):
+            raise ValueError("click_url must start with http:// or https://")
+        v = _num("min_minutes", self.min_minutes, 0, 1440)
+        self.min_minutes = int(v)
+        for f in ("quiet_start_hour", "quiet_end_hour"):
+            v = _num(f, getattr(self, f), 0, 24)
+            if v != int(v):
+                raise ValueError(f"{f} must be a whole hour")
+            setattr(self, f, int(v))
+
+    @classmethod
+    def keys(cls) -> list[str]:
+        return [f.name for f in fields(cls)]
+
+    def as_dict(self) -> dict:
+        return {k: getattr(self, k) for k in self.keys()}
+
+    def is_quiet(self, hour: int) -> bool:
+        a, b = self.quiet_start_hour, self.quiet_end_hour
+        if not self.quiet_enabled or a == b:
+            return False
+        return a <= hour < b if a < b else (hour >= a or hour < b)
+
+
+SECTIONS = {"tariff": Tariff, "traffic_light": TrafficLight, "notifications": Notifications}
+
+
+@dataclass
 class Config:
     raw: dict
     tz: ZoneInfo
@@ -228,27 +283,29 @@ class Config:
     port: int
     tariff: Tariff
     light: TrafficLight = field(default_factory=TrafficLight)
+    notify: Notifications = field(default_factory=Notifications)
     prices: dict = field(default_factory=dict)
     meter: dict = field(default_factory=dict)
 
     def defaults(self) -> dict:
-        """[tariff] / [traffic_light] from config.toml, before settings-page overrides."""
-        return {"tariff": self.raw.get("tariff", {}), "traffic_light": self.raw.get("traffic_light", {})}
+        """Settings sections from config.toml, before settings-page overrides."""
+        return {k: self.raw.get(k, {}) for k in SECTIONS}
 
-    def build(self, overrides: dict | None) -> tuple[Tariff, TrafficLight]:
+    def build(self, overrides: dict | None) -> tuple[Tariff, TrafficLight, Notifications]:
         """Validate config.toml values + overrides; raises ValueError with a readable message."""
         o, d = overrides or {}, self.defaults()
-        for section, cls in (("tariff", Tariff), ("traffic_light", TrafficLight)):
+        for section, cls in SECTIONS.items():
             unknown = set(o.get(section, {})) - set(cls.keys())
             if unknown:
                 raise ValueError(f"unknown {section} setting(s): {', '.join(sorted(unknown))}")
         tariff = Tariff(**{**d["tariff"], **o.get("tariff", {})}, tz=self.tz,
                         stored_spot_vat_percent=self.prices.get("vat_percent", 25.5))
         light = TrafficLight(**{**d["traffic_light"], **o.get("traffic_light", {})})
-        return tariff, light
+        notify = Notifications(**{**d["notifications"], **o.get("notifications", {})})
+        return tariff, light, notify
 
     def apply(self, overrides: dict | None) -> None:
-        self.tariff, self.light = self.build(overrides)
+        self.tariff, self.light, self.notify = self.build(overrides)
 
 
 def load(path: str | Path | None = None) -> Config:
@@ -264,6 +321,7 @@ def load(path: str | Path | None = None) -> Config:
         tariff = Tariff(**raw.get("tariff", {}), tz=tz,
                         stored_spot_vat_percent=raw.get("prices", {}).get("vat_percent", 25.5))
         light = TrafficLight(**raw.get("traffic_light", {}))
+        notify = Notifications(**raw.get("notifications", {}))
     except (TypeError, ValueError) as e:
         raise SystemExit(f"config.toml: {e}") from None
     return Config(
@@ -274,6 +332,7 @@ def load(path: str | Path | None = None) -> Config:
         port=int(app.get("port", 8080)),
         tariff=tariff,
         light=light,
+        notify=notify,
         prices=raw.get("prices", {}),
         meter=raw.get("meter", {}),
     )

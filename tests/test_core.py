@@ -12,7 +12,7 @@ from app.analysis import traffic_light  # noqa: E402
 from datetime import date, datetime  # noqa: E402
 from zoneinfo import ZoneInfo  # noqa: E402
 
-from app.config import Config, Tariff, TrafficLight  # noqa: E402
+from app.config import Config, Notifications, Tariff, TrafficLight  # noqa: E402
 from app.db import DB  # noqa: E402
 from app.meter.base import Reading  # noqa: E402
 from app.meter.p1 import TelegramAssembler, check_crc, crc16, parse_telegram  # noqa: E402
@@ -287,6 +287,79 @@ class SettingsTests(unittest.TestCase):
             r = traffic_light(cfg, db, now=100)
             self.assertEqual(r["level"], "green")                 # 6 c × 0.7 = 4.2 c < 5 c
             self.assertAlmostEqual(r["price"], 4.2)
+
+
+class NotifierTests(unittest.TestCase):
+    """Price slots start at t=0 (02:00 Helsinki time on 1 Jan 1970), 15 min each."""
+
+    def setUp(self):
+        import app.notify as notify
+        self.notify, self.sent = notify, []
+        self._orig = notify.send
+        notify.send = lambda n, title, message, tags=None, priority=3: self.sent.append(title)
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.db = DB(Path(self.tmp.name) / "t.db")
+
+    def tearDown(self):
+        self.notify.send = self._orig
+        self.tmp.cleanup()
+
+    def _notifier(self, prices, **n):
+        self.db.upsert_prices([(i * 900, (i + 1) * 900, p) for i, p in enumerate(prices)])
+        cfg = Config(raw={}, tz=HEL, db_path=None, host="", port=0, tariff=Tariff(tz=HEL),
+                     notify=Notifications(**{"enabled": True, "topic": "t", **n}))
+        return self.notify.Notifier(cfg, self.db)
+
+    def test_not_at_startup_then_on_change(self):
+        nt = self._notifier([3, 3, 3, 3, 20, 20, 3, 3, 3, 3, 20])
+        self.assertIsNone(nt.check(100))                   # long green already at start-up: stay quiet
+        self.assertIsNone(nt.check(1000))
+        nt.check(3700)                                     # red, but on_red is off
+        nt.check(5500)                                     # green 5400–9000 = 60 min
+        self.assertEqual(self.sent, ["Green: good time to use electricity"])
+        nt.check(6400)                                     # same green period: only once
+        self.assertEqual(len(self.sent), 1)
+
+    def test_short_period_skipped(self):
+        nt = self._notifier([20, 3, 20, 20])
+        nt.check(100)
+        nt.check(1000)                                     # green only until 1800 (13 min left)
+        self.assertEqual(self.sent, [])
+
+    def test_red_when_enabled(self):
+        nt = self._notifier([3, 20, 20, 20, 3], on_red=True)
+        nt.check(100)
+        nt.check(1000)
+        self.assertEqual(self.sent, ["Red: electricity is expensive"])
+
+    def test_quiet_hours_delay(self):
+        nt = self._notifier([20] + [3] * 15, quiet_enabled=True, quiet_start_hour=2, quiet_end_hour=3)
+        nt.check(100)
+        nt.check(1000)                                     # 02:16, quiet
+        self.assertEqual(self.sent, [])
+        nt.check(3700)                                     # 03:01, still green → send now
+        self.assertEqual(len(self.sent), 1)
+
+    def test_disabled_sends_nothing(self):
+        nt = self._notifier([20, 3, 3, 3, 3, 3], enabled=False)
+        nt.check(100)
+        nt.check(1000)
+        self.assertEqual(self.sent, [])
+
+    def test_failure_is_recorded(self):
+        def boom(*a, **k):
+            raise OSError("network down")
+        self.notify.send = boom
+        nt = self._notifier([20, 3, 3, 3, 3, 3])
+        nt.check(100)
+        nt.check(1000)
+        self.assertIn("network down", nt.last_error)
+
+    def test_validation(self):
+        for bad in ({"enabled": True, "topic": ""}, {"topic": "has space"}, {"server": "ntfy.sh"},
+                    {"click_url": "192.168.1.2"}, {"quiet_start_hour": 25}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                Notifications(**bad)
 
 
 if __name__ == "__main__":

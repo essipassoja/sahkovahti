@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import logging
 import mimetypes
+import secrets
 import time
 from datetime import date, datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -11,20 +12,25 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import analysis
-from .config import Config
+from .config import SECTIONS, Config
 from .db import DB, QUARTER
 from .meter import MeterService
+from .notify import Notifier, send
 from .prices import PriceUpdater
 
 STATIC = Path(__file__).parent / "static"
-PAGES = {"/": "simple.html", "": "simple.html", "/details": "index.html", "/settings": "settings.html"}
+# the service worker and manifest are served from the root so they control the whole app
+PAGES = {"/": "simple.html", "": "simple.html", "/details": "index.html", "/settings": "settings.html",
+         "/sw.js": "sw.js", "/manifest.webmanifest": "manifest.webmanifest"}
+mimetypes.add_type("application/manifest+json", ".webmanifest")
 SETTINGS_KEY = "settings"
 log = logging.getLogger("http")
 
 
 class App:
-    def __init__(self, cfg: Config, db: DB, meter: MeterService, prices: PriceUpdater):
-        self.cfg, self.db, self.meter, self.prices = cfg, db, meter, prices
+    def __init__(self, cfg: Config, db: DB, meter: MeterService, prices: PriceUpdater,
+                 notifier: Notifier | None = None):
+        self.cfg, self.db, self.meter, self.prices, self.notifier = cfg, db, meter, prices, notifier
         try:
             cfg.apply(self._saved_settings())
         except (TypeError, ValueError) as e:
@@ -117,16 +123,24 @@ class App:
 
     # ---------------- settings ----------------
     def settings(self, _q):
+        n = self.cfg.notify.as_dict()
+        suggested = not n["topic"]
+        if suggested:          # suggestion only; stored when you save
+            n["topic"] = "sahkovahti-" + secrets.token_hex(5)
+        nf = self.notifier
         return {
-            "values": {"tariff": self.cfg.tariff.as_dict(), "traffic_light": self.cfg.light.as_dict()},
+            "values": {"tariff": self.cfg.tariff.as_dict(), "traffic_light": self.cfg.light.as_dict(),
+                       "notifications": n},
             "saved": self._saved_settings(),
             "now": self._preview(self.cfg.tariff, self.cfg.light),
+            "notifier": {"last_sent": nf.last_sent, "last_error": nf.last_error} if nf else None,
+            "topic_suggested": suggested,
         }
 
     def _overrides(self, body) -> dict:
         if not isinstance(body, dict):
             raise ValueError("expected a JSON object")
-        return {k: body[k] for k in ("tariff", "traffic_light") if isinstance(body.get(k), dict)}
+        return {k: body[k] for k in SECTIONS if isinstance(body.get(k), dict)}
 
     def _preview(self, tariff, light) -> dict:
         now = int(time.time())
@@ -142,10 +156,25 @@ class App:
 
     def preview_settings(self, _q, body):
         try:
-            tariff, light = self.cfg.build(self._overrides(body))
+            tariff, light, _n = self.cfg.build(self._overrides(body))
         except TypeError as e:
             raise ValueError(str(e)) from None
         return self._preview(tariff, light)
+
+    def test_notification(self, _q, body):
+        """Send a test message with the settings currently in the form (saved or not)."""
+        o = self._overrides(body)
+        o.setdefault("notifications", {})["enabled"] = True     # testing works before switching on
+        try:
+            _t, _l, n = self.cfg.build(o)
+        except TypeError as e:
+            raise ValueError(str(e)) from None
+        try:
+            send(n, "Sähkövahti test", "Notifications work. You'll get a message when the light changes.",
+                 ["white_check_mark"])
+        except Exception as e:
+            raise ValueError(f"could not send to {n.server}: {e}") from None
+        return {"ok": True, "topic": n.topic}
 
     def save_settings(self, _q, body):
         o = self._overrides(body)
@@ -171,6 +200,7 @@ class App:
     POST_ROUTES = {
         "/api/prices/refresh": "refresh_prices", "/api/settings": "save_settings",
         "/api/settings/preview": "preview_settings", "/api/settings/reset": "reset_settings",
+        "/api/settings/test-notification": "test_notification",
     }
 
 

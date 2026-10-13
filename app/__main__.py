@@ -7,6 +7,7 @@ import logging
 from . import config
 from .db import DB
 from .meter import MeterService
+from .notify import Notifier
 from .prices import PriceUpdater
 from .server import App, serve
 
@@ -23,9 +24,12 @@ def main():
     db = DB(cfg.db_path)
     prices = PriceUpdater(cfg, db)
     meter = MeterService(cfg, db)
+    notifier = Notifier(cfg, db)
+    app = App(cfg, db, meter, prices, notifier)   # loads saved settings before the notifier starts
     prices.start()
     meter.start()
-    serve(App(cfg, db, meter, prices))
+    notifier.start()
+    serve(app)
 
 
 if __name__ == "__main__":

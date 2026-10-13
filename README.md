@@ -54,6 +54,20 @@ Prices come from [porssisahko.net](https://porssisahko.net) (Nord Pool day‑ahe
 more often in the afternoon until they appear. Price history accumulates from the day you start the
 app, so costs for days before that show as "no prices stored".
 
+## Use it on your phone or tablet
+
+With the app running, open `http://<this computer's IP>:8080` on a phone on the same Wi‑Fi (find the IP
+with `ipconfig` on Windows or `hostname -I` on Linux). Allow Python through the firewall on private
+networks if the page doesn't load.
+
+**Install it like an app:** iPhone/iPad: Share → *Add to Home Screen*. Android: ⋮ → *Add to Home screen*
+(full "Install app" with offline support needs HTTPS, e.g. via [Tailscale](https://tailscale.com) — which is
+also the safe way to use the app away from home; don't open the port to the internet, there's no password).
+
+**Notifications:** menu → Settings → *Phone notifications*. Install the free [ntfy](https://ntfy.sh) app,
+subscribe to the topic shown, press *Send test notification*, then switch notifications on and save. You get a
+message when the light turns green (and optionally red), skipping short periods and quiet hours.
+
 ## When the HAN hardware arrives
 
 1. **Ask your grid company to open the HAN port** (often free; some do it remotely, e.g. via their
@@ -116,6 +130,7 @@ All JSON, handy for Home Assistant or your own scripts:
 | `POST /api/prices/refresh` | fetch prices now |
 | `GET /api/settings` | current tariff & traffic light settings, price breakdown now |
 | `POST /api/settings` | save settings (JSON body `{"tariff": {...}, "traffic_light": {...}}`, `Content-Type: application/json`) |
+| `POST /api/settings/test-notification` | send a test message with the given notification settings |
 
 ## Project layout
 

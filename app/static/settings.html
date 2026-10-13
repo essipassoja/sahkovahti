@@ -2,10 +2,18 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Settings · Sähkövahti</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M18 2 6 18h8l-2 12 12-16h-8z' fill='%23eda100'/></svg>">
 <link rel="stylesheet" href="/static/style.css">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Sähkövahti">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f4f3f0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
 </head>
 <body class="settings-page">
 <div class="wrap">
@@ -106,6 +114,49 @@
             <option value="spot">Your spot price (after discount, incl. VAT)</option>
             <option value="total">Your total price (incl. margin, transfer, tax &amp; VAT)</option>
           </select></label>
+      </fieldset>
+
+      <fieldset class="panel">
+        <legend>Phone notifications <span class="muted">via the free ntfy app</span></legend>
+        <ol class="steps wide">
+          <li>Install <b>ntfy</b> on your phone (App Store / Google Play).</li>
+          <li>In ntfy, tap <b>+</b> and subscribe to the topic below<span id="subLinkWrap">, or open
+            <a id="subLink" href="#" target="_blank" rel="noopener">this link</a> on the phone</span>.</li>
+          <li>Press <b>Send test notification</b>, then turn notifications on and <b>Save</b>.</li>
+        </ol>
+        <label class="field wide">Topic
+          <input name="notifications.topic" type="text" maxlength="64" autocomplete="off" spellcheck="false">
+          <small>Works like a password: anyone who knows it can read the messages (they contain only prices).
+            A random one is suggested; Save to keep it.</small></label>
+        <label class="check wide"><input name="notifications.enabled" type="checkbox">
+          <span>Send notifications</span></label>
+        <label class="check"><input name="notifications.on_green" type="checkbox">
+          <span>When the light turns green<small>good time for big loads</small></span></label>
+        <label class="check"><input name="notifications.on_red" type="checkbox">
+          <span>When the light turns red<small>expensive, postpone big loads</small></span></label>
+        <label class="field">Ignore periods shorter than <span class="unit">minutes</span>
+          <input name="notifications.min_minutes" type="number" step="15" min="0" max="1440" inputmode="numeric" required>
+          <small>avoids messages for a single cheap 15 min slot</small></label>
+        <div class="field">
+          <label class="check"><input name="notifications.quiet_enabled" type="checkbox"><span>Quiet hours</span></label>
+          <div class="hours-row">
+            <label>from <select name="notifications.quiet_start_hour" aria-label="Quiet hours start"></select></label>
+            <label>to <select name="notifications.quiet_end_hour" aria-label="Quiet hours end"></select></label>
+          </div>
+          <small>a period still going when quiet hours end is notified then</small></div>
+        <label class="field wide">Open when tapped <span class="unit">optional</span>
+          <span class="inline-input"><input name="notifications.click_url" type="url" placeholder="http://192.168.1.20:8080">
+            <button type="button" id="useHere">Use this address</button></span>
+          <small>the app's address on your home network</small></label>
+        <details class="wide advanced"><summary>Advanced</summary>
+          <label class="field">ntfy server
+            <input name="notifications.server" type="url" placeholder="https://ntfy.sh">
+            <small>only if you run your own ntfy server</small></label>
+        </details>
+        <div class="wide test-row">
+          <button type="button" id="testBtn">Send test notification</button>
+          <span class="msg" id="testMsg" role="status">&nbsp;</span>
+        </div>
       </fieldset>
     </div>
 

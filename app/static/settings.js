@@ -21,10 +21,18 @@
       else el.value = v ?? "";
     }
     showMode();
+    updateSubLink();
+  }
+
+  function updateSubLink() {
+    const n = read().notifications;
+    const ok = /^[A-Za-z0-9_-]{1,64}$/.test(n.topic || "");
+    $("subLinkWrap").hidden = !ok;
+    if (ok) $("subLink").href = `${(n.server || "https://ntfy.sh").replace(/\/$/, "")}/${n.topic}`;
   }
 
   function read() {
-    const out = { tariff: {}, traffic_light: {} };
+    const out = { tariff: {}, traffic_light: {}, notifications: {} };
     for (const el of form.elements) {
       if (!el.name || !el.name.includes(".")) continue;
       const [sec, key] = el.name.split(".");
@@ -117,11 +125,43 @@
     const r = await fetch("/api/settings", { cache: "no-store" });
     const d = await r.json();
     fill(d.values);
-    saved = JSON.stringify(read());
+    // a freshly suggested topic counts as a change, so the page reminds you to save it
+    saved = d.topic_suggested ? "" : JSON.stringify(read());
     renderPreview(d.now);
+    showNotifier(d.notifier);
+    if (dirty()) setMsg("Save to keep the suggested notification topic", "warn");
   }
 
-  form.addEventListener("input", (e) => { if (e.target.name === "tariff.transfer_mode") showMode(); preview(); });
+  function showNotifier(n) {
+    if (!n) return;
+    const t = (s) => new Date(s * 1000).toLocaleString("fi-FI", { hour: "2-digit", minute: "2-digit", day: "numeric", month: "numeric" });
+    if (n.last_error) setTest(`Last notification failed: ${n.last_error}`, "bad");
+    else if (n.last_sent) setTest(`Last sent ${t(n.last_sent.at)}: ${n.last_sent.title}`);
+  }
+  function setTest(text, cls = "") { $("testMsg").textContent = text || " "; $("testMsg").className = "msg " + cls; }
+
+  $("useHere").onclick = () => {
+    form.elements["notifications.click_url"].value = location.origin;
+    preview();
+  };
+  $("testBtn").onclick = async () => {
+    $("testBtn").disabled = true;
+    setTest("Sending…");
+    try {
+      const d = await send("/api/settings/test-notification", read());
+      setTest(`Sent to topic "${d.topic}" — check your phone.`, "ok");
+    } catch (err) {
+      setTest(friendly(err.message), "bad");
+    } finally {
+      $("testBtn").disabled = false;
+    }
+  };
+
+  form.addEventListener("input", (e) => {
+    if (e.target.name === "tariff.transfer_mode") showMode();
+    if (e.target.name?.startsWith("notifications.")) updateSubLink();
+    preview();
+  });
   form.addEventListener("change", (e) => { if (e.target.name === "tariff.transfer_mode") showMode(); preview(); });
 
   form.addEventListener("submit", async (e) => {

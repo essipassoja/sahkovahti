@@ -1,4 +1,7 @@
-// Slide-in menu shared by the simple and detailed views.
+// Slide-in menu shared by all pages, plus the service worker that makes the app installable.
+if ("serviceWorker" in navigator) {   // only on https:// or localhost; plain http on the LAN skips this
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
 (function () {
   const btn = document.getElementById("menuBtn"), drawer = document.getElementById("drawer"),
     scrim = document.getElementById("scrim"), close = document.getElementById("drawerClose");
