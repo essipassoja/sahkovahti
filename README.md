@@ -13,6 +13,8 @@ It runs with **only Python 3.11+ — no packages to install** (pyserial is neede
 cable plugs straight into the computer running the app). Until your HAN hardware is installed,
 it runs on a realistic **simulated house** with **real prices**.
 
+Done using Claude.
+
 ## Quick start
 
 ```bash
