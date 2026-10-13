@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sähkövahti</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M18 2 6 18h8l-2 12 12-16h-8z' fill='%23eda100'/></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M18 2 6 18h8l-2 12 12-16h-8z"/></svg>
+      <h1>Sähkövahti</h1>
+    </div>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
+  </header>
+
+  <div class="banner" id="simBanner" hidden>
+    <strong>Simulated meter data.</strong> Prices are real. Switch <code>[meter] source</code> in
+    <code>config.toml</code> once your HAN reader is installed.
+  </div>
+
+  <section class="tiles" aria-label="Right now">
+    <div class="tile hero">
+      <div class="label">Power now</div>
+      <div class="value"><span id="powerNow">–</span><small id="powerUnit">kW</small></div>
+      <svg class="spark" id="spark" preserveAspectRatio="none" aria-hidden="true"></svg>
+    </div>
+    <div class="tile">
+      <div class="label">Price now <span class="muted">(total)</span></div>
+      <div class="value"><span id="priceNow">–</span><small>c/kWh</small></div>
+      <div class="sub" id="priceSub">&nbsp;</div>
+    </div>
+    <div class="tile">
+      <div class="label">Costing right now</div>
+      <div class="value"><span id="rateNow">–</span><small>€/h</small></div>
+      <div class="sub" id="quarterSub">&nbsp;</div>
+    </div>
+    <div class="tile">
+      <div class="label">Today</div>
+      <div class="value"><span id="todayCost">–</span><small>€</small></div>
+      <div class="sub" id="todaySub">&nbsp;</div>
+    </div>
+    <div class="tile">
+      <div class="label" id="monthLabel">This month</div>
+      <div class="value"><span id="monthCost">–</span><small>€</small></div>
+      <div class="sub" id="monthSub">&nbsp;</div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="dayTitle">
+    <div class="panel-head">
+      <h2 id="dayTitle">Day view</h2>
+      <div class="controls">
+        <div class="seg" role="group" aria-label="Consumption unit">
+          <button data-unit="kwh" class="on">kWh</button><button data-unit="eur">€</button>
+        </div>
+        <div class="datenav">
+          <button id="prevDay" aria-label="Previous day">‹</button>
+          <input type="date" id="dayPick">
+          <button id="nextDay" aria-label="Next day">›</button>
+          <button id="todayBtn" class="ghost">Today</button>
+        </div>
+      </div>
+    </div>
+    <div class="chart-title">Spot price per 15 min <span class="muted">c/kWh incl. VAT · your total adds <span id="adders">–</span> c</span></div>
+    <div class="chart" id="priceChart"></div>
+    <div class="chart-title" id="useTitle">Consumption per 15 min <span class="muted">kWh</span></div>
+    <div class="chart" id="useChart"></div>
+    <div class="day-summary" id="daySummary"></div>
+    <details class="table-view"><summary>Show as table</summary><div id="dayTable"></div></details>
+  </section>
+
+  <div class="grid2">
+    <section class="panel" aria-labelledby="liveTitle">
+      <div class="panel-head">
+        <h2 id="liveTitle">Power, last 3 hours</h2>
+        <div class="seg" role="group" aria-label="Range">
+          <button data-min="60">1 h</button><button data-min="180" class="on">3 h</button><button data-min="1440">24 h</button>
+        </div>
+      </div>
+      <div class="chart" id="powerChart"></div>
+      <div class="phases" id="phases"></div>
+    </section>
+
+    <section class="panel" aria-labelledby="cheapTitle">
+      <div class="panel-head"><h2 id="cheapTitle">Cheapest upcoming windows</h2></div>
+      <p class="hint">Best time to run the dishwasher, laundry, sauna or EV charging — based on prices published so far
+        (tomorrow's appear around 14:00).</p>
+      <ul class="windows" id="windows"></ul>
+    </section>
+  </div>
+
+  <section class="panel" aria-labelledby="histTitle">
+    <div class="panel-head">
+      <h2 id="histTitle">Last 30 days</h2>
+      <div class="seg" role="group" aria-label="History unit">
+        <button data-hunit="kwh" class="on">kWh</button><button data-hunit="eur">€</button><button data-hunit="price">Avg c/kWh</button>
+      </div>
+    </div>
+    <div class="chart" id="histChart"></div>
+    <p class="hint">Click a day to open it above.</p>
+  </section>
+
+  <footer class="foot" id="foot"></footer>
+</div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+<script src="/static/charts.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>

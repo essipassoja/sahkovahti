@@ -1,0 +1,118 @@
+# Sähkövahti — home electricity & spot price dashboard
+
+A small local web app that shows your household's electricity use next to the Finnish
+15‑minute spot prices, and what it actually costs you.
+
+- **Live**: power now, price now (spot + your margin, transfer and tax), €/h right now, per‑phase current
+- **Day view**: spot price and your consumption/cost for every 15‑minute slot, side by side
+- **Cheapest upcoming 1/2/3/4‑hour windows** — for laundry, sauna, dishwasher, EV charging
+- **30‑day history**, month‑to‑date cost, and how much your timing saved vs. flat consumption
+- Works in light & dark mode, on phone and desktop, from any device on your home network
+
+It runs with **only Python 3.11+ — no packages to install** (pyserial is needed only if the HAN
+cable plugs straight into the computer running the app). Until your HAN hardware is installed,
+it runs on a realistic **simulated house** with **real prices**.
+
+## Quick start
+
+```bash
+cd sahkovahti
+python3 -m app
+```
+
+Open <http://localhost:8080> (or `http://<computer-ip>:8080` from your phone).
+On first start the simulator generates 14 days of fake history so the charts have something to show.
+
+## Configure your tariff
+
+Edit `config.toml` → `[tariff]` with the numbers from your invoices (all **including VAT**):
+
+| Setting | Where to find it |
+|---|---|
+| `retailer_margin_c_kwh` | your spot contract's margin ("marginaali") |
+| `transfer_c_kwh` | grid company invoice, energy part of transfer ("siirtomaksu") |
+| `electricity_tax_c_kwh` | grid invoice ("sähkövero") — the rate changes with state budgets, check it |
+| `monthly_fixed_eur` | basic fees, both invoices together |
+
+Prices come from [porssisahko.net](https://porssisahko.net) (Nord Pool day‑ahead, 15‑min slots since
+1 Oct 2025, VAT 25.5 % included). Tomorrow's prices are published around 14:00; the app polls
+more often in the afternoon until they appear. Price history accumulates from the day you start the
+app, so costs for days before that show as "no prices stored".
+
+## When the HAN hardware arrives
+
+1. **Ask your grid company to open the HAN port** (often free; some do it remotely, e.g. via their
+   web service). Until it is enabled, the port sends nothing.
+2. Connect a reader to the RJ12 HAN port. Two common options:
+   - **Wi‑Fi reader (ESP32/ESP8266)** in the meter cabinet — the easiest, no cable to your computer.
+     Use one that publishes over **MQTT** or exposes the **raw telegram over TCP**.
+   - **USB P1/HAN cable** to a Raspberry Pi in or near the cabinet.
+   The HAN port gives 5 V but very little current — most ESP32 readers need their own power supply.
+3. **Check what the meter sends** before switching the dashboard over:
+   ```bash
+   python3 -m app.sniff --serial /dev/ttyUSB0      # USB cable (pip install pyserial)
+   python3 -m app.sniff --tcp 192.168.1.50:23      # Wi-Fi reader in raw TCP mode
+   ```
+   You should see a block of lines like `1-0:1.8.0(00012345.678*kWh)` with `CRC: OK` every 1–10 s.
+4. Set `[meter] source` in `config.toml` to `p1_serial`, `p1_tcp` or `mqtt`, fill in that section,
+   and restart. The yellow "simulated" banner disappears and the status badge turns green.
+5. Delete `data/energy.db` first if you want to drop the simulated history.
+
+### If your meter sends binary
+Most Finnish HAN meters send the ASCII P1 telegram this app parses (same format as in Sweden and
+Denmark). If `app.sniff` shows only gibberish/hex, your meter sends binary DLMS/COSEM frames. In that
+case use an ESP32 reader firmware that decodes DLMS (e.g. AmsToMqttBridge / "amsreader") and set
+`source = "mqtt"` with `payload = "json"`, mapping its field names under `[meter.mqtt.json_fields]`.
+MQTT needs `pip install paho-mqtt`.
+
+## Run it permanently (Raspberry Pi / Linux)
+
+```bash
+sudo cp sahkovahti.service /etc/systemd/system/
+sudo nano /etc/systemd/system/sahkovahti.service   # check User and WorkingDirectory
+sudo systemctl enable --now sahkovahti
+journalctl -u sahkovahti -f                          # logs
+```
+
+For the USB cable, add the user to the `dialout` group: `sudo usermod -aG dialout $USER`.
+
+## How cost is calculated
+
+The meter's cumulative counter (`1.8.0`, kWh) is the source of truth. For each 15‑minute slot the
+counter value at the slot boundaries is interpolated from the nearest readings, so energy lands in the
+correct slot even when readings arrive irregularly; gaps over an hour show as missing rather than
+guessed. Cost per slot = kWh × (spot + margin + transfer + tax). Data is stored in SQLite
+(`data/energy.db`, about 600 MB per year at the default 10‑second storage interval, or ~100 MB
+with `store_interval_s = 60` — the 15‑minute figures are equally accurate either way, since they
+come from the counter).
+
+## API
+
+All JSON, handy for Home Assistant or your own scripts:
+
+| Endpoint | Returns |
+|---|---|
+| `GET /api/live` | power, phases, price now/next, €/h, today's summary |
+| `GET /api/day?date=YYYY-MM-DD` | 15‑min slots: spot, total price, kWh, cost |
+| `GET /api/history?days=30` | daily totals + month to date |
+| `GET /api/power?minutes=180` | power time series |
+| `GET /api/cheapest` | cheapest upcoming 1–4 h windows |
+| `GET /api/status` | meter/price status, tariff |
+| `POST /api/prices/refresh` | fetch prices now |
+
+## Project layout
+
+```
+app/
+  __main__.py      start-up
+  config.py        config.toml loading, tariff maths
+  db.py            SQLite storage, per-slot energy from the meter counter
+  prices.py        spot price fetching
+  analysis.py      day/history summaries, cheapest windows
+  server.py        HTTP server + JSON API (standard library)
+  sniff.py         hardware check tool
+  meter/p1.py      HAN/P1 telegram parser with CRC check
+  meter/sources.py simulator, serial, TCP, MQTT sources
+  static/          dashboard (HTML/CSS/JS, no external libraries — works offline)
+tests/             python3 -m unittest discover -s tests
+```

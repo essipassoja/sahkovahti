@@ -1,0 +1,15 @@
+[Unit]
+Description=Sahkovahti electricity dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+# Change these to your user and the folder where you put the app
+User=pi
+WorkingDirectory=/home/pi/sahkovahti
+ExecStart=/usr/bin/python3 -m app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
