@@ -57,6 +57,12 @@
             <label>to <input name="tariff.retailer_monthly_promo_until" type="date" aria-label="Intro fee until"></label>
           </div>
           <small>after this the normal basic fee applies</small></div>
+        <label class="field wide">Spot price billed per
+          <select name="tariff.price_resolution">
+            <option value="15min">15 minutes (varttihinta)</option>
+            <option value="hour">Hour — average of its four 15 min prices (tuntihinta)</option>
+          </select>
+          <small>Check your contract. Hourly is common on older contracts and where the meter only reports hourly.</small></label>
         <label class="check wide"><input name="tariff.negative_spot_as_zero" type="checkbox">
           <span>Negative spot prices are billed as 0 c<small>The discount then applies only to positive prices.</small></span></label>
       </fieldset>

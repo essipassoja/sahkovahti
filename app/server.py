@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 
 from . import analysis
 from .config import SECTIONS, Config
-from .db import DB, QUARTER
+from .db import DB
 from .meter import MeterService
 from .notify import Notifier, send
 from .prices import PriceUpdater
@@ -46,12 +46,13 @@ class App:
     def live(self, _q):
         r = self.meter.latest
         now = int(time.time())
-        spot = self.db.price_at(now)
         tariff = self.cfg.tariff
+        spot = analysis.spot_at(now, tariff, self.db)
         total = tariff.total_c_kwh(spot, now)
         energy = tariff.energy_c_kwh(spot, now)
-        q_start = now - now % QUARTER
-        nxt = self.db.price_at(q_start + QUARTER)
+        step = tariff.slot_s
+        slot_start = now - now % step
+        nxt = analysis.spot_at(slot_start + step, tariff, self.db)
         today = datetime.now(self.cfg.tz).date()
         rep = analysis.day_report(today, self.cfg, self.db)
         cur = next((s for s in rep["slots"] if s["state"] == "now"), None)
@@ -67,7 +68,8 @@ class App:
             "total": round(total, 3) if total is not None else None,
             "next_spot": nxt,
             "cost_rate_eur_h": round(p / 1000 * total / 100, 3) if p is not None and total is not None else None,
-            "quarter": {"start": q_start, "kwh": cur["kwh"] if cur else None, "cost_eur": cur["cost_eur"] if cur else None},
+            "slot_s": step,
+            "slot": {"start": slot_start, "kwh": cur["kwh"] if cur else None, "cost_eur": cur["cost_eur"] if cur else None},
             "today": rep["summary"],
             "light": analysis.traffic_light(self.cfg, self.db, now),
             "recent": self._recent_power(now),
@@ -158,7 +160,7 @@ class App:
 
     def _preview(self, tariff, light) -> dict:
         now = int(time.time())
-        spot = self.db.price_at(now)
+        spot = analysis.spot_at(now, tariff, self.db)
         b = tariff.breakdown(spot, now)
         today = datetime.now(self.cfg.tz).date()
         b["monthly_fixed_eur"] = round(tariff.monthly_fixed_eur(today), 2)

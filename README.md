@@ -52,7 +52,10 @@ page has no password, so anyone on your home network can change it; it holds no 
 
 Prices come from [porssisahko.net](https://porssisahko.net) (Nord Pool day‑ahead, 15‑min slots since
 1 Oct 2025, VAT 25.5 % included). Tomorrow's prices are published around 14:00; the app polls
-more often in the afternoon until they appear. Price history accumulates from the day you start the
+more often in the afternoon until they appear. If your contract is billed per hour (tuntihinta) rather than per 15
+minutes, choose **Hour** under "Spot price billed per" on the settings page (or set `price_resolution = "hour"`
+in `[tariff]`). Each hour's price is then the average of its four 15‑min prices, and the day view, traffic light,
+cheapest windows and notifications all work per hour. Price history accumulates from the day you start the
 app, so costs for days before that show as "no prices stored".
 
 ## Weather

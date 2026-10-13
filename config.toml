@@ -29,6 +29,9 @@ retailer_margin_c_kwh = 0.39     # your electricity company's margin ("marginaal
 spot_discount_percent = 0.0      # e.g. 30 = you pay 70 % of the spot price ("-30 % pörssisähköstä")
 discount_until        = ""       # last day of the discount, "YYYY-MM-DD"; "" = no end date
 negative_spot_as_zero = false    # true if negative spot prices are billed as 0
+# "15min" = billed per 15-minute spot price (varttihinta)
+# "hour"  = billed per hour at the average of its four 15-min prices (tuntihinta) — check your contract
+price_resolution      = "15min"
 retailer_monthly_eur  = 0.0      # retailer basic fee (perusmaksu), €/month — normal price
 # Optional introductory basic fee, e.g. 0 €/month for the first 6 months. Leave out for none.
 # retailer_monthly_promo_eur   = 0.0

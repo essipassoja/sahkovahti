@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app.analysis import traffic_light  # noqa: E402
+from app.analysis import cheapest_windows, day_report, spot_at, spot_prices, traffic_light  # noqa: E402
 from datetime import date, datetime  # noqa: E402
 from zoneinfo import ZoneInfo  # noqa: E402
 
@@ -295,6 +295,58 @@ class SettingsTests(unittest.TestCase):
             r = traffic_light(cfg, db, now=100)
             self.assertEqual(r["level"], "green")                 # 6 c × 0.7 = 4.2 c < 5 c
             self.assertAlmostEqual(r["price"], 4.2)
+
+
+class HourlyPriceTests(unittest.TestCase):
+    """Quarter prices from t=0 (02:00 Helsinki, a full hour) — hourly contracts pay the hour average."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+        self.db = DB(Path(self.tmp.name) / "t.db")
+        self.db.upsert_prices([(i * 900, (i + 1) * 900, p) for i, p in enumerate([2, 4, 6, 8, 20, 20, 20, 20])])
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_validation(self):
+        with self.assertRaises(ValueError):
+            Tariff(price_resolution="30min")
+        self.assertEqual(Tariff(price_resolution="hour").slot_s, 3600)
+
+    def test_quarters_unchanged_by_default(self):
+        t = Tariff(tz=HEL)
+        self.assertEqual(spot_prices(0, 3600, t, self.db), {0: 2, 900: 4, 1800: 6, 2700: 8})
+        self.assertEqual(spot_at(1000, t, self.db), 4)
+
+    def test_hour_average_independent_of_range(self):
+        t = Tariff(price_resolution="hour", tz=HEL)
+        self.assertEqual(spot_prices(1800, 4500, t, self.db), {1800: 5, 2700: 5, 3600: 20})
+        self.assertEqual(spot_at(2000, t, self.db), 5)
+
+    def test_traffic_light_changes_on_full_hours(self):
+        cfg = Config(raw={}, tz=HEL, db_path=None, host="", port=0,
+                     tariff=Tariff(price_resolution="hour", tz=HEL), light=TrafficLight(green_below=6))
+        r = traffic_light(cfg, self.db, now=100)
+        self.assertEqual(r["level"], "green")                   # 5 c average, though 2 quarters cost 6–8 c
+        self.assertEqual(r["next"], {"level": "red", "at": 3600})
+
+    def test_day_report_has_hourly_slots(self):
+        cfg = Config(raw={}, tz=HEL, db_path=None, host="", port=0, tariff=Tariff(price_resolution="hour", tz=HEL))
+        rep = day_report(date(1970, 1, 1), cfg, self.db)
+        self.assertEqual(rep["slot_s"], 3600)
+        self.assertEqual(len(rep["slots"]), 24)
+        self.assertEqual([s["spot"] for s in rep["slots"][:4]], [None, None, 5, 20])   # prices from 02:00
+
+    def test_cheapest_window_is_a_billing_hour(self):
+        import app.analysis as analysis
+        cfg = Config(raw={}, tz=HEL, db_path=None, host="", port=0, tariff=Tariff(price_resolution="hour", tz=HEL))
+        orig = analysis.time.time
+        analysis.time.time = lambda: 1000
+        try:
+            w = cheapest_windows(cfg, self.db, hours=(1,))
+        finally:
+            analysis.time.time = orig
+        self.assertEqual((w[0]["start"], w[0]["avg_spot"]), (0, 5))     # the current billing hour
 
 
 class NotifierTests(unittest.TestCase):

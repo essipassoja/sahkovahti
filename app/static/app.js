@@ -6,6 +6,7 @@
   const nf = (d) => new Intl.NumberFormat("fi-FI", { minimumFractionDigits: d, maximumFractionDigits: d });
   const f0 = nf(0), f1 = nf(1), f2 = nf(2), f3 = nf(3);
   const num = (v, f = f2, dash = "–") => (v == null || Number.isNaN(v) ? dash : f.format(v));
+  const slotName = (sec) => (sec === 3600 ? "hour" : "15 min");
   const tf = () => new Intl.DateTimeFormat("fi-FI", { timeZone: state.tz, hour: "2-digit", minute: "2-digit" });
   const hm = (t) => tf().format(new Date(t * 1000));
   const dayName = (t) => new Intl.DateTimeFormat("en-GB", { timeZone: state.tz, weekday: "short", day: "numeric", month: "short" }).format(new Date(t * 1000));
@@ -55,10 +56,10 @@
     }
     $("priceNow").textContent = num(d.total, f2);
     $("priceSub").textContent = d.spot != null
-      ? `spot ${num(d.spot, f2)} · next 15 min ${num(d.next_spot, f2)}`
+      ? `spot ${num(d.spot, f2)} · next ${slotName(d.slot_s)} ${num(d.next_spot, f2)}`
       : "no price for this slot";
     $("rateNow").textContent = num(d.cost_rate_eur_h, f2);
-    $("quarterSub").textContent = d.quarter.kwh != null ? `this 15 min: ${num(d.quarter.cost_eur * 100, f1)} c so far` : " ";
+    $("quarterSub").textContent = d.slot.kwh != null ? `this ${slotName(d.slot_s)}: ${num(d.slot.cost_eur * 100, f1)} c so far` : " ";
     const t = d.today;
     $("todayCost").textContent = num(t.cost_eur, f2);
     $("todaySub").textContent = `${num(t.kwh, f1)} kWh · avg ${num(t.avg_total_c_kwh, f1)} c/kWh`;
@@ -90,10 +91,12 @@
     const d = state.dayData;
     if (!d) return;
     const sl = d.slots;
+    const slotLong = d.slot_s === 3600 ? "hour" : "15 minutes";
+    document.querySelectorAll("[data-slot]").forEach((el) => { el.textContent = slotName(d.slot_s); });
     const nowIdx = sl.findIndex((s) => s.state === "now");
     const xLabel = (i) => { const { h, m } = localParts(sl[i].start); return m === 0 && h % 3 === 0 ? String(h).padStart(2, "0") : null; };
     const slotTip = (s) => {
-      const head = `<div class="t">${hm(s.start)}–${hm(s.start + 900)}</div>`;
+      const head = `<div class="t">${hm(s.start)}–${hm(s.start + d.slot_s)}</div>`;
       return head + row("Spot", s.spot != null ? num(s.spot, f2) + " c/kWh" : "–") +
         row("Your total", s.total != null ? num(s.total, f2) + " c/kWh" : "–") +
         row("Used", s.kwh != null ? num(s.kwh, f3) + " kWh" : "–") +
@@ -103,15 +106,15 @@
     Charts.bars($("priceChart"), sl.map((s) => ({ y: s.spot, cls: "bar-price", future: s.state === "future", tip: slotTip(s) })), {
       height: 170, yFmt: (v) => f0.format(v), xLabel, nowIndex: nowIdx, nowLabel: "now",
       ref: avg != null ? { value: avg, label: `day avg ${num(avg, f1)}` } : null,
-      label: "Spot price per 15 minutes", emptyText: "No prices for this day yet (next day is published around 14:00)",
+      label: `Spot price per ${slotLong}`, emptyText: "No prices for this day yet (next day is published around 14:00)",
     });
     const eur = state.unit === "eur";
     $("useTitle").innerHTML = eur
-      ? `Cost per 15 min <span class="muted">cents, incl. margin, transfer & tax</span>`
-      : `Consumption per 15 min <span class="muted">kWh</span>`;
+      ? `Cost per ${slotName(d.slot_s)} <span class="muted">cents, incl. margin, transfer & tax</span>`
+      : `Consumption per ${slotName(d.slot_s)} <span class="muted">kWh</span>`;
     Charts.bars($("useChart"), sl.map((s) => ({ y: eur ? (s.cost_eur != null ? s.cost_eur * 100 : null) : s.kwh, cls: "bar-use", tip: slotTip(s) })), {
       height: 150, yFmt: (v) => (eur ? f0.format(v) : f2.format(v)), xLabel, nowIndex: nowIdx,
-      label: eur ? "Cost per 15 minutes" : "Consumption per 15 minutes", emptyText: "No meter readings for this day",
+      label: eur ? `Cost per ${slotLong}` : `Consumption per ${slotLong}`, emptyText: "No meter readings for this day",
     });
 
     const s = d.summary;

@@ -4,8 +4,10 @@ from __future__ import annotations
 import time
 from datetime import date, datetime, timedelta
 
-from .config import Config
+from .config import Config, Tariff
 from .db import DB, QUARTER
+
+HOUR = 3600
 
 
 def day_bounds(d: date, cfg: Config) -> tuple[int, int]:
@@ -15,15 +17,42 @@ def day_bounds(d: date, cfg: Config) -> tuple[int, int]:
     return int(start.timestamp()), int(end.timestamp())   # 23/24/25 h around DST changes
 
 
+def spot_prices(t0: int, t1: int, tariff: Tariff, db: DB) -> dict[int, float]:
+    """Spot price per quarter start in [t0, t1), as you are billed for it.
+
+    With an hourly contract every quarter gets its hour's average (the mean of the known
+    quarter prices in that hour), so the price only changes on full hours.
+    """
+    hourly = tariff.slot_s == HOUR
+    # whole hours, so an hour's average doesn't depend on where the range is cut
+    a, b = (t0 - t0 % HOUR, t1 + (-t1) % HOUR) if hourly else (t0, t1)
+    prices = {}
+    for s, e, p in db.prices_between(a, b):
+        # hourly data (older sources) is spread over its quarters
+        for q in range(max(s, a), min(e, b), QUARTER):
+            prices[q] = p
+    if hourly:
+        per_hour: dict[int, list[float]] = {}
+        for q, p in prices.items():
+            per_hour.setdefault(q - q % HOUR, []).append(p)
+        avg = {h: sum(v) / len(v) for h, v in per_hour.items()}
+        prices = {q: avg[q - q % HOUR] for q in prices}
+    return {q: p for q, p in prices.items() if t0 <= q < t1}
+
+
+def spot_at(t: int, tariff: Tariff, db: DB) -> float | None:
+    """Billed spot price for the moment t (hour average on an hourly contract)."""
+    q = t - t % QUARTER
+    p = spot_prices(q, q + QUARTER, tariff, db).get(q)
+    return None if p is None else round(p, 4)
+
+
 def slots(t0: int, t1: int, cfg: Config, db: DB) -> list[dict]:
-    boundaries = list(range(t0, t1 + 1, QUARTER))
+    step = cfg.tariff.slot_s
+    boundaries = list(range(t0, t1 + 1, step))
     kwh = db.energy_per_slot(boundaries, "import_kwh")
     exp = db.energy_per_slot(boundaries, "export_kwh")
-    prices = {}
-    for s, e, p in db.prices_between(t0, t1):
-        # hourly data (older sources) is spread over its quarters
-        for q in range(s, e, QUARTER):
-            prices[q] = p
+    prices = spot_prices(t0, t1, cfg.tariff, db)
     now = time.time()
     out = []
     for i, s in enumerate(boundaries[:-1]):
@@ -33,14 +62,14 @@ def slots(t0: int, t1: int, cfg: Config, db: DB) -> list[dict]:
         k = kwh[i] if i < len(kwh) else None
         out.append({
             "start": s,
-            "spot": spot,
+            "spot": round(spot, 4) if spot is not None else None,
             "energy": round(energy, 3) if energy is not None else None,   # your spot part after discount
             "total": round(total, 3) if total is not None else None,
             "kwh": round(k, 4) if k is not None else None,
             "export_kwh": round(exp[i], 4) if i < len(exp) and exp[i] else None,
             "cost_eur": round(k * total / 100, 4) if k is not None and total is not None else None,
             "spot_cost_eur": round(k * spot / 100, 4) if k is not None and spot is not None else None,
-            "state": "past" if s + QUARTER <= now else ("now" if s <= now else "future"),
+            "state": "past" if s + step <= now else ("now" if s <= now else "future"),
         })
     return out
 
@@ -76,7 +105,8 @@ def summarize(sl: list[dict], cfg: Config) -> dict:
 def day_report(d: date, cfg: Config, db: DB) -> dict:
     t0, t1 = day_bounds(d, cfg)
     sl = slots(t0, t1, cfg, db)
-    return {"date": d.isoformat(), "start": t0, "end": t1, "slots": sl, "summary": summarize(sl, cfg)}
+    return {"date": d.isoformat(), "start": t0, "end": t1, "slot_s": cfg.tariff.slot_s,
+            "slots": sl, "summary": summarize(sl, cfg)}
 
 
 def history(days: int, cfg: Config, db: DB) -> list[dict]:
@@ -103,15 +133,13 @@ def month_to_date(cfg: Config, db: DB) -> dict:
 def cheapest_windows(cfg: Config, db: DB, hours=(1, 2, 3, 4)) -> list[dict]:
     """Cheapest contiguous windows from the current quarter onward (known prices only).
 
-    Ranked by your total price, so a cheaper night transfer price counts too."""
+    Ranked by your total price, so a cheaper night transfer price counts too. On an hourly
+    contract windows are whole billing hours, starting with the current one."""
     now = int(time.time())
-    q0 = now - now % QUARTER
-    rows = db.prices_between(q0, q0 + 3 * 86400)
-    series = []
-    for s, e, p in rows:
-        for q in range(s, e, QUARTER):
-            if q >= q0:
-                series.append((q, p, cfg.tariff.total_c_kwh(p, q)))
+    hourly = cfg.tariff.slot_s == HOUR
+    q0 = now - now % (HOUR if hourly else QUARTER)
+    series = [(q, p, cfg.tariff.total_c_kwh(p, q))
+              for q, p in sorted(spot_prices(q0, q0 + 3 * 86400, cfg.tariff, db).items())]
     # require contiguity
     out = []
     for h in hours:
@@ -119,6 +147,8 @@ def cheapest_windows(cfg: Config, db: DB, hours=(1, 2, 3, 4)) -> list[dict]:
         best = None
         for i in range(len(series) - n + 1):
             if series[i + n - 1][0] - series[i][0] != (n - 1) * QUARTER:
+                continue
+            if hourly and series[i][0] % HOUR:
                 continue
             win = series[i:i + n]
             avg_total = sum(t for _, _, t in win) / n
@@ -135,14 +165,8 @@ def traffic_light(cfg: Config, db: DB, now: int | None = None) -> dict:
     now = int(time.time()) if now is None else now
     q0 = now - now % QUARTER
     tl = cfg.light
-    series = []
-    for s, e, p in db.prices_between(q0, q0 + 2 * 86400):
-        for q in range(s, e, QUARTER):
-            if q >= q0:
-                price = (cfg.tariff.energy_c_kwh(p, q) if tl.basis == "spot"
-                         else cfg.tariff.total_c_kwh(p, q))
-                series.append((q, price))
-    series.sort()
+    series = [(q, cfg.tariff.energy_c_kwh(p, q) if tl.basis == "spot" else cfg.tariff.total_c_kwh(p, q))
+              for q, p in sorted(spot_prices(q0, q0 + 2 * 86400, cfg.tariff, db).items())]
     if not series or series[0][0] != q0:
         level, price = None, None
     else:

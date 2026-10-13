@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 ROOT = Path(__file__).resolve().parent.parent
 
 TRANSFER_MODES = ("flat", "day_night", "seasonal")
+PRICE_RESOLUTIONS = {"15min": 900, "hour": 3600}   # seconds per billing slot
 WINTER_MONTHS = (11, 12, 1, 2, 3)   # kausisiirto: "talviarkipäivä" = Nov–Mar, Mon–Sat
 
 
@@ -44,6 +45,9 @@ class Tariff:
     retailer_monthly_promo_eur: float | None = None   # introductory basic fee, e.g. 0 € for 6 months
     retailer_monthly_promo_from: str = ""      # first day of the intro fee, "" = from the start
     retailer_monthly_promo_until: str = ""     # last day of the intro fee, "" = no end
+    # "15min" = billed per 15-min spot price; "hour" = billed per hour at the average of its
+    # four 15-min prices (older contracts / meters that only report hourly)
+    price_resolution: str = "15min"
     # grid / transfer (sähkönsiirto)
     grid_company: str = ""
     transfer_mode: str = "flat"            # flat | day_night | seasonal
@@ -73,6 +77,8 @@ class Tariff:
             if v != int(v):
                 raise ValueError(f"{f} must be a whole hour")
             setattr(self, f, int(v))
+        if self.price_resolution not in PRICE_RESOLUTIONS:
+            raise ValueError(f"price_resolution must be one of {', '.join(PRICE_RESOLUTIONS)}")
         if self.transfer_mode not in TRANSFER_MODES:
             raise ValueError(f"transfer_mode must be one of {', '.join(TRANSFER_MODES)}")
         if self.transfer_mode != "flat" and self.peak_start_hour == self.peak_end_hour:
@@ -106,6 +112,11 @@ class Tariff:
         return {k: getattr(self, k) for k in self.keys()}
 
     # ---------- price rules ----------
+    @property
+    def slot_s(self) -> int:
+        """Length of one billing slot in seconds (900 or 3600)."""
+        return PRICE_RESOLUTIONS[self.price_resolution]
+
     @property
     def vat_factor(self) -> float:
         return 1 + self.vat_percent / 100
