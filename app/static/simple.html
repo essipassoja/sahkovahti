@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f4f3f0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#121211" media="(prefers-color-scheme: dark)">
+<title>Sähkövahti</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><path d='M18 2 6 18h8l-2 12 12-16h-8z' fill='%23eda100'/></svg>">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="simple-page">
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <button class="menu-btn" id="menuBtn" aria-label="Open menu" aria-controls="drawer" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M18 2 6 18h8l-2 12 12-16h-8z"/></svg>
+      <h1>Sähkövahti</h1>
+    </div>
+    <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
+  </header>
+
+  <main class="simple">
+    <section class="light-card" id="lightCard" data-level="none" aria-live="polite">
+      <div class="lamps" aria-hidden="true">
+        <span class="lamp red"></span><span class="lamp yellow"></span><span class="lamp green"></span>
+      </div>
+      <div class="verdict">
+        <h2 id="verdict">Loading…</h2>
+        <p id="advice">&nbsp;</p>
+        <p class="next" id="nextChange">&nbsp;</p>
+        <p class="legend" id="legend">&nbsp;</p>
+      </div>
+    </section>
+
+    <section class="big-tiles" aria-label="Right now">
+      <div class="big-tile">
+        <div class="label">Price now</div>
+        <div class="value"><span id="priceNow">–</span><small>c/kWh</small></div>
+        <div class="sub" id="priceSub">&nbsp;</div>
+      </div>
+      <div class="big-tile">
+        <div class="label">Using now</div>
+        <div class="value"><span id="powerNow">–</span><small id="powerUnit">kW</small></div>
+        <div class="sub" id="powerSub">&nbsp;</div>
+      </div>
+    </section>
+
+    <p class="sim-note" id="simNote" hidden>Consumption is simulated until the HAN reader is connected. Prices are real.</p>
+  </main>
+</div>
+
+<nav class="drawer" id="drawer" aria-label="Views" hidden>
+  <div class="drawer-head"><strong>Sähkövahti</strong>
+    <button class="menu-btn" id="drawerClose" aria-label="Close menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <a href="/" aria-current="page">Now<small>Traffic light, price and consumption</small></a>
+  <a href="/details">Details<small>Day charts, power history, cheapest windows, monthly totals</small></a>
+</nav>
+<div class="scrim" id="scrim" hidden></div>
+<script src="/static/nav.js"></script>
+<script src="/static/simple.js"></script>
+</body>
+</html>

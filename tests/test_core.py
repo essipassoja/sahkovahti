@@ -8,6 +8,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+from app.analysis import traffic_light  # noqa: E402
+from app.config import Config, Tariff, TrafficLight  # noqa: E402
 from app.db import DB  # noqa: E402
 from app.meter.base import Reading  # noqa: E402
 from app.meter.p1 import TelegramAssembler, check_crc, crc16, parse_telegram  # noqa: E402
@@ -89,7 +91,7 @@ class PriceTests(unittest.TestCase):
 
 class EnergyTests(unittest.TestCase):
     def test_interpolated_slot_energy(self):
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             db = DB(Path(d) / "t.db")
             # constant 2 kW, readings every 7 s (not aligned to slots)
             kwh, rs = 100.0, []
@@ -101,13 +103,58 @@ class EnergyTests(unittest.TestCase):
                 self.assertAlmostEqual(v, 0.5, places=3)  # 2 kW * 15 min
 
     def test_gap_gives_none(self):
-        with tempfile.TemporaryDirectory() as d:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
             db = DB(Path(d) / "t.db")
             db.insert_readings([Reading(ts=0, import_kwh=1), Reading(ts=900, import_kwh=2),
                                 Reading(ts=9000, import_kwh=3), Reading(ts=9900, import_kwh=4)])
             out = db.energy_per_slot([0, 900, 1800])
             self.assertAlmostEqual(out[0], 1.0)
             self.assertIsNone(out[1])  # 2.25 h gap without readings
+
+
+class TrafficLightTests(unittest.TestCase):
+    def test_levels_and_boundaries(self):
+        tl = TrafficLight(green_below=5, red_above=15)
+        self.assertEqual(tl.level(4.99), "green")
+        self.assertEqual(tl.level(5), "yellow")
+        self.assertEqual(tl.level(15), "yellow")
+        self.assertEqual(tl.level(15.01), "red")
+        self.assertIsNone(tl.level(None))
+
+    def test_invalid_config(self):
+        with self.assertRaises(ValueError):
+            TrafficLight(basis="whatever")
+        with self.assertRaises(ValueError):
+            TrafficLight(green_below=20, red_above=10)
+
+    def _run(self, prices, light=None, tariff=None):
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            db = DB(Path(d) / "t.db")
+            db.upsert_prices([(i * 900, (i + 1) * 900, p) for i, p in enumerate(prices)])
+            cfg = Config(raw={}, tz=None, db_path=None, host="", port=0,
+                         tariff=tariff or Tariff(), light=light or TrafficLight())
+            return traffic_light(cfg, db, now=100)
+
+    def test_next_change_and_next_green(self):
+        r = self._run([10, 10, 20, 3, 3])
+        self.assertEqual(r["level"], "yellow")
+        self.assertEqual(r["next"], {"level": "red", "at": 1800})
+        self.assertEqual(r["next_green"], 2700)
+
+    def test_stays_green(self):
+        r = self._run([1, 2, 3])
+        self.assertEqual(r["level"], "green")
+        self.assertIsNone(r["next"])
+        self.assertIsNone(r["next_green"])
+
+    def test_no_current_price(self):
+        r = self._run([])
+        self.assertIsNone(r["level"])
+
+    def test_total_basis_adds_tariff(self):
+        r = self._run([3], light=TrafficLight(basis="total"), tariff=Tariff(transfer_c_kwh=4))
+        self.assertEqual(r["level"], "yellow")   # 3 + 4 = 7 c
+        self.assertAlmostEqual(r["price"], 7)
 
 
 if __name__ == "__main__":

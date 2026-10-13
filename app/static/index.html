@@ -11,6 +11,9 @@
 <div class="wrap">
   <header class="top">
     <div class="brand">
+      <button class="menu-btn" id="menuBtn" aria-label="Open menu" aria-controls="drawer" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+      </button>
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M18 2 6 18h8l-2 12 12-16h-8z"/></svg>
       <h1>Sähkövahti</h1>
     </div>
@@ -107,6 +110,15 @@
   <footer class="foot" id="foot"></footer>
 </div>
 <div class="tip" id="tip" role="tooltip" hidden></div>
+<nav class="drawer" id="drawer" aria-label="Views" hidden>
+  <div class="drawer-head"><strong>Sähkövahti</strong>
+    <button class="menu-btn" id="drawerClose" aria-label="Close menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <a href="/">Now<small>Traffic light, price and consumption</small></a>
+  <a href="/details" aria-current="page">Details<small>Day charts, power history, cheapest windows, monthly totals</small></a>
+</nav>
+<div class="scrim" id="scrim" hidden></div>
+<script src="/static/nav.js"></script>
 <script src="/static/charts.js"></script>
 <script src="/static/app.js"></script>
 </body>

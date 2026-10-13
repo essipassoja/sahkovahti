@@ -3,6 +3,9 @@
 A small local web app that shows your household's electricity use next to the Finnish
 15‑minute spot prices, and what it actually costs you.
 
+- **Front page for phone / tablet**: a green / yellow / red traffic light telling whether now is a good
+  time for big loads, plus price now and power now. Thresholds are set in `[traffic_light]` in `config.toml`.
+  The detailed dashboard opens from the menu (or go to `/details`)
 - **Live**: power now, price now (spot + your margin, transfer and tax), €/h right now, per‑phase current
 - **Day view**: spot price and your consumption/cost for every 15‑minute slot, side by side
 - **Cheapest upcoming 1/2/3/4‑hour windows** — for laundry, sauna, dishwasher, EV charging

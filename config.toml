@@ -26,6 +26,15 @@ transfer_c_kwh        = 4.00     # grid transfer fee ("siirtomaksu, energia")
 electricity_tax_c_kwh = 2.827    # electricity tax (sähkövero) incl. VAT — CHECK your invoice, the rate changes with budgets
 monthly_fixed_eur     = 0.0      # basic fees (perusmaksut) — shown in monthly totals only
 
+[traffic_light]
+# The front page shows green / yellow / red: is now a good time to run big loads
+# (sauna, EV charging, laundry, dishwasher)? Thresholds in c/kWh.
+green_below = 5.0      # cheaper than this → green
+red_above   = 15.0     # more expensive than this → red; in between → yellow
+# "spot"  = compare the spot price incl. VAT (what most Finnish price apps show)
+# "total" = compare spot + margin + transfer + tax (raise the thresholds by ~7 c if you use this)
+basis = "spot"
+
 [meter]
 # simulator | p1_serial | p1_tcp | mqtt
 source = "simulator"

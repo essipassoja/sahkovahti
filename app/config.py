@@ -28,6 +28,29 @@ class Tariff:
 
 
 @dataclass
+class TrafficLight:
+    """Price levels for "is now a good time to run big loads?"."""
+    green_below: float = 5.0     # c/kWh: below this → green
+    red_above: float = 15.0      # c/kWh: above this → red; in between → yellow
+    basis: str = "spot"          # "spot" (incl. VAT) or "total" (spot + margin, transfer, tax)
+
+    def __post_init__(self):
+        if self.basis not in ("spot", "total"):
+            raise ValueError(f"[traffic_light] basis must be 'spot' or 'total', not {self.basis!r}")
+        if self.green_below > self.red_above:
+            raise ValueError("[traffic_light] green_below must not be greater than red_above")
+
+    def level(self, price_c_kwh: float | None) -> str | None:
+        if price_c_kwh is None:
+            return None
+        if price_c_kwh < self.green_below:
+            return "green"
+        if price_c_kwh > self.red_above:
+            return "red"
+        return "yellow"
+
+
+@dataclass
 class Config:
     raw: dict
     tz: ZoneInfo
@@ -35,6 +58,7 @@ class Config:
     host: str
     port: int
     tariff: Tariff
+    light: TrafficLight = field(default_factory=TrafficLight)
     prices: dict = field(default_factory=dict)
     meter: dict = field(default_factory=dict)
 
@@ -54,6 +78,7 @@ def load(path: str | Path | None = None) -> Config:
         host=app.get("host", "0.0.0.0"),
         port=int(app.get("port", 8080)),
         tariff=Tariff(**raw.get("tariff", {})),
+        light=TrafficLight(**raw.get("traffic_light", {})),
         prices=raw.get("prices", {}),
         meter=raw.get("meter", {}),
     )

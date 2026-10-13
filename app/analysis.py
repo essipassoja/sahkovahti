@@ -124,3 +124,44 @@ def cheapest_windows(cfg: Config, db: DB, hours=(1, 2, 3, 4)) -> list[dict]:
                         "avg_spot": round(best[1], 3),
                         "avg_total": round(cfg.tariff.total_c_kwh(best[1]), 3)})
     return out
+
+
+def traffic_light(cfg: Config, db: DB, now: int | None = None) -> dict:
+    """Current green/yellow/red level and when it next changes (known prices only)."""
+    now = int(time.time()) if now is None else now
+    q0 = now - now % QUARTER
+    tl = cfg.light
+    series = []
+    for s, e, p in db.prices_between(q0, q0 + 2 * 86400):
+        for q in range(s, e, QUARTER):
+            if q >= q0:
+                price = p if tl.basis == "spot" else cfg.tariff.total_c_kwh(p)
+                series.append((q, price))
+    series.sort()
+    if not series or series[0][0] != q0:
+        level, price = None, None
+    else:
+        price = series[0][1]
+        level = tl.level(price)
+    nxt = next_green = None
+    prev_q = q0
+    for q, p in series[1:]:
+        if q - prev_q != QUARTER:      # gap in known prices: stop looking ahead
+            break
+        prev_q = q
+        lv = tl.level(p)
+        if nxt is None and lv != level:
+            nxt = {"level": lv, "at": q}
+        if next_green is None and lv == "green" and level != "green":
+            next_green = q
+        if nxt is not None and (next_green is not None or level == "green"):
+            break
+    return {
+        "level": level,
+        "price": round(price, 3) if price is not None else None,
+        "basis": tl.basis,
+        "green_below": tl.green_below,
+        "red_above": tl.red_above,
+        "next": nxt,
+        "next_green": next_green,
+    }

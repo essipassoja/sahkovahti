@@ -17,6 +17,7 @@ from .meter import MeterService
 from .prices import PriceUpdater
 
 STATIC = Path(__file__).parent / "static"
+PAGES = {"/": "simple.html", "": "simple.html", "/details": "index.html"}
 log = logging.getLogger("http")
 
 
@@ -48,6 +49,7 @@ class App:
             "cost_rate_eur_h": round(p / 1000 * total / 100, 3) if p is not None and total is not None else None,
             "quarter": {"start": q_start, "kwh": cur["kwh"] if cur else None, "cost_eur": cur["cost_eur"] if cur else None},
             "today": rep["summary"],
+            "light": analysis.traffic_light(self.cfg, self.db, now),
             "recent": self._recent_power(now),
         }
 
@@ -144,7 +146,7 @@ def make_handler(app: App):
             if self._dispatch(app.ROUTES):
                 return
             path = urlparse(self.path).path
-            rel = "index.html" if path in ("/", "") else path.lstrip("/").removeprefix("static/")
+            rel = PAGES.get(path) or path.lstrip("/").removeprefix("static/")
             f = (STATIC / rel).resolve()
             if STATIC.resolve() not in f.parents or not f.is_file():
                 return self._send(404, b"not found", "text/plain")
