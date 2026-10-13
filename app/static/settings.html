@@ -140,6 +140,12 @@
           <span>When the light turns green<small>good time for big loads</small></span></label>
         <label class="check"><input name="notifications.on_red" type="checkbox">
           <span>When the light turns red<small>expensive, postpone big loads</small></span></label>
+        <label class="check wide"><input name="notifications.on_tomorrow" type="checkbox">
+          <span>When tomorrow is very cheap or very expensive<small>checked once a day when the next day's prices come out (about 14:15), using tomorrow's average price</small></span></label>
+        <label class="field">Very cheap: average below <span class="unit">c/kWh</span>
+          <input name="notifications.tomorrow_cheap_below" type="number" step="0.1" inputmode="decimal" required></label>
+        <label class="field">Very expensive: average above <span class="unit">c/kWh</span>
+          <input name="notifications.tomorrow_expensive_above" type="number" step="0.1" inputmode="decimal" required></label>
         <label class="field">Ignore periods shorter than <span class="unit">minutes</span>
           <input name="notifications.min_minutes" type="number" step="15" min="0" max="1440" inputmode="numeric" required>
           <small>avoids messages for a single cheap 15 min slot</small></label>

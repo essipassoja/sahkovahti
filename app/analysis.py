@@ -160,13 +160,32 @@ def cheapest_windows(cfg: Config, db: DB, hours=(1, 2, 3, 4)) -> list[dict]:
     return out
 
 
+def _light_series(t0: int, t1: int, cfg: Config, db: DB) -> list[tuple[int, float]]:
+    """(quarter start, price the traffic light compares) for known prices in [t0, t1)."""
+    basis = cfg.light.basis
+    return [(q, cfg.tariff.energy_c_kwh(p, q) if basis == "spot" else cfg.tariff.total_c_kwh(p, q))
+            for q, p in sorted(spot_prices(t0, t1, cfg.tariff, db).items())]
+
+
+def day_light_prices(d: date, cfg: Config, db: DB) -> dict | None:
+    """Average / min / max of a whole day's prices on the traffic light's basis.
+
+    None until every quarter of the day has a price (tomorrow's are published ~14 Finnish time).
+    """
+    t0, t1 = day_bounds(d, cfg)
+    prices = [p for _, p in _light_series(t0, t1, cfg, db)]
+    if len(prices) != (t1 - t0) // QUARTER:
+        return None
+    return {"date": d.isoformat(), "avg": round(sum(prices) / len(prices), 3),
+            "min": round(min(prices), 3), "max": round(max(prices), 3)}
+
+
 def traffic_light(cfg: Config, db: DB, now: int | None = None) -> dict:
     """Current green/yellow/red level and when it next changes (known prices only)."""
     now = int(time.time()) if now is None else now
     q0 = now - now % QUARTER
     tl = cfg.light
-    series = [(q, cfg.tariff.energy_c_kwh(p, q) if tl.basis == "spot" else cfg.tariff.total_c_kwh(p, q))
-              for q, p in sorted(spot_prices(q0, q0 + 2 * 86400, cfg.tariff, db).items())]
+    series = _light_series(q0, q0 + 2 * 86400, cfg, db)
     if not series or series[0][0] != q0:
         level, price = None, None
     else:

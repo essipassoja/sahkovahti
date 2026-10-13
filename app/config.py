@@ -240,6 +240,9 @@ class Notifications:
     topic: str = ""                # random-looking name; anyone who knows it can read the messages
     on_green: bool = True          # light turns green
     on_red: bool = False           # light turns red
+    on_tomorrow: bool = True       # after tomorrow's prices are out (~14:15), warn if its average is extreme
+    tomorrow_cheap_below: float = 3.0       # c/kWh: below this → "very cheap" (traffic light basis)
+    tomorrow_expensive_above: float = 20.0  # c/kWh: above this → "very expensive"
     min_minutes: int = 30          # skip green/red periods shorter than this
     quiet_enabled: bool = False
     quiet_start_hour: int = 22
@@ -247,7 +250,7 @@ class Notifications:
     click_url: str = ""            # opened when you tap the notification, e.g. http://192.168.1.20:8080
 
     def __post_init__(self):
-        for f in ("enabled", "on_green", "on_red", "quiet_enabled"):
+        for f in ("enabled", "on_green", "on_red", "on_tomorrow", "quiet_enabled"):
             if not isinstance(getattr(self, f), bool):
                 raise ValueError(f"{f} must be true or false")
         self.server = str(self.server or "").strip().rstrip("/") or "https://ntfy.sh"
@@ -261,6 +264,10 @@ class Notifications:
         self.click_url = str(self.click_url or "").strip()
         if self.click_url and not re.match(r"^https?://", self.click_url):
             raise ValueError("click_url must start with http:// or https://")
+        self.tomorrow_cheap_below = _num("tomorrow_cheap_below", self.tomorrow_cheap_below, -100, 1000)
+        self.tomorrow_expensive_above = _num("tomorrow_expensive_above", self.tomorrow_expensive_above, -100, 1000)
+        if self.tomorrow_cheap_below > self.tomorrow_expensive_above:
+            raise ValueError("tomorrow_cheap_below must not be greater than tomorrow_expensive_above")
         v = _num("min_minutes", self.min_minutes, 0, 1440)
         self.min_minutes = int(v)
         for f in ("quiet_start_hour", "quiet_end_hour"):

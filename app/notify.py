@@ -6,7 +6,7 @@ import logging
 import threading
 import time
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from . import analysis
 from .config import Config, Notifications
@@ -14,6 +14,7 @@ from .db import DB
 
 log = logging.getLogger("notify")
 CHECK_EVERY_S = 60
+TOMORROW_KEY = "notify_tomorrow_sent"   # date of the last day summarized, survives restarts
 
 
 def send(n: Notifications, title: str, message: str, tags: list[str] | None = None, priority: int = 3) -> None:
@@ -32,6 +33,7 @@ class Notifier(threading.Thread):
 
     A period counts only if it lasts at least min_minutes. During quiet hours nothing is sent;
     if the period is still going (with enough time left) when quiet hours end, it is sent then.
+    Once tomorrow's prices are known, one more message lists tomorrow's green and red periods.
     """
 
     def __init__(self, cfg: Config, db: DB):
@@ -68,14 +70,37 @@ class Notifier(threading.Thread):
             return None
         msg = self._message(L, until)
         self.done = True
+        self._send(msg, now)     # don't retry this period if it fails
+        return msg
+
+    def check_tomorrow(self, now: int | None = None) -> dict | None:
+        """Warns once per day, after tomorrow's prices are out, if its average is very low or high."""
+        now = int(time.time()) if now is None else now
+        n = self.cfg.notify
+        if not n.enabled or not n.topic or not n.on_tomorrow:
+            return None
+        local = datetime.fromtimestamp(now, self.cfg.tz)
+        tomorrow = (local + timedelta(days=1)).date()
+        if self.db.get_meta(TOMORROW_KEY) == tomorrow.isoformat() or n.is_quiet(local.hour):
+            return None
+        day = analysis.day_light_prices(tomorrow, self.cfg, self.db)
+        if day is None:
+            return None          # not published yet
+        self.db.set_meta(TOMORROW_KEY, tomorrow.isoformat())   # once per day, even if sending fails
+        if n.tomorrow_cheap_below <= day["avg"] <= n.tomorrow_expensive_above:
+            return None          # an ordinary day
+        msg = self._tomorrow_message(day)
+        self._send(msg, now)
+        return msg
+
+    def _send(self, msg: dict, now: int) -> None:
         try:
-            send(n, **msg)
+            send(self.cfg.notify, **msg)
             self.last_sent, self.last_error = {"at": now, **msg}, None
             log.info("sent: %s", msg["title"])
-        except Exception as e:  # network down, bad server — don't retry this period
+        except Exception as e:  # network down, bad server
             self.last_error = f"{type(e).__name__}: {e}"
             log.warning("notification failed: %s", self.last_error)
-        return msg
 
     def _message(self, L: dict, until: int | None) -> dict:
         hm = lambda t: datetime.fromtimestamp(t, self.cfg.tz).strftime("%H:%M")  # noqa: E731
@@ -89,10 +114,22 @@ class Notifier(threading.Thread):
                 "message": f"Price {price}, red {how_long}. Postpone big loads if you can.",
                 "tags": ["red_circle"], "priority": 3}
 
+    def _tomorrow_message(self, day: dict) -> dict:
+        c = lambda v: f"{v:.1f}".replace(".", ",")  # noqa: E731
+        prices = f"Average {c(day['avg'])} c/kWh (min {c(day['min'])}, max {c(day['max'])})."
+        if day["avg"] < self.cfg.notify.tomorrow_cheap_below:
+            return {"title": "Tomorrow is very cheap",
+                    "message": f"{prices} Save laundry, EV charging and sauna for tomorrow.",
+                    "tags": ["calendar", "green_circle"], "priority": 3}
+        return {"title": "Tomorrow is very expensive",
+                "message": f"{prices} Do laundry and EV charging today if you can.",
+                "tags": ["calendar", "red_circle"], "priority": 3}
+
     def run(self):
         while True:
-            try:
-                self.check()
-            except Exception:
-                log.exception("notifier check failed")
+            for step in (self.check, self.check_tomorrow):
+                try:
+                    step()
+                except Exception:
+                    log.exception("notifier %s failed", step.__name__)
             time.sleep(CHECK_EVERY_S)

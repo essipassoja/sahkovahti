@@ -81,7 +81,9 @@ also the safe way to use the app away from home; don't open the port to the inte
 
 **Notifications:** menu → Settings → *Phone notifications*. Install the free [ntfy](https://ntfy.sh) app,
 subscribe to the topic shown, press *Send test notification*, then switch notifications on and save. You get a
-message when the light turns green (and optionally red), skipping short periods and quiet hours.
+message when the light turns green (and optionally red), skipping short periods and quiet hours. Once the next
+day's prices are out (about 14:15), you also get a message if tomorrow's average price is very cheap (below 3 c/kWh)
+or very expensive (above 20 c/kWh), so you can plan laundry or car charging. Both limits can be changed.
 
 ## When the HAN hardware arrives
 

@@ -417,9 +417,46 @@ class NotifierTests(unittest.TestCase):
         nt.check(1000)
         self.assertIn("network down", nt.last_error)
 
+    def _tomorrow(self, prices, **n):
+        """Prices for all of 2 Jan 1970 (Helsinki); 'now' is 1 Jan 15:00."""
+        t0 = int(datetime(1970, 1, 2, tzinfo=HEL).timestamp())
+        self.db.upsert_prices([(t0 + i * 900, t0 + (i + 1) * 900, p) for i, p in enumerate(prices)])
+        cfg = Config(raw={}, tz=HEL, db_path=None, host="", port=0, tariff=Tariff(tz=HEL),
+                     notify=Notifications(**{"enabled": True, "topic": "t", **n}))
+        return self.notify.Notifier(cfg, self.db), int(datetime(1970, 1, 1, 15, tzinfo=HEL).timestamp())
+
+    def test_tomorrow_cheap_once(self):
+        nt, now = self._tomorrow([1] * 48 + [4] * 48)          # average 2.5
+        msg = nt.check_tomorrow(now)
+        self.assertEqual(msg["title"], "Tomorrow is very cheap")
+        self.assertIn("Average 2,5 c/kWh (min 1,0, max 4,0)", msg["message"])
+        self.assertIsNone(nt.check_tomorrow(now + 60))
+        self.assertIsNone(self.notify.Notifier(nt.cfg, self.db).check_tomorrow(now + 120))  # after restart
+        self.assertEqual(len(self.sent), 1)
+
+    def test_tomorrow_expensive(self):
+        nt, now = self._tomorrow([10] * 48 + [32] * 48)        # average 21, though half the day is cheapish
+        self.assertEqual(nt.check_tomorrow(now)["title"], "Tomorrow is very expensive")
+
+    def test_tomorrow_ordinary_day_is_quiet(self):
+        nt, now = self._tomorrow([1] * 48 + [39] * 48)         # average exactly 20: not above
+        self.assertIsNone(nt.check_tomorrow(now))
+        self.assertEqual(self.sent, [])
+
+    def test_tomorrow_waits_for_full_day(self):
+        nt, now = self._tomorrow([1] * 50)
+        self.assertIsNone(nt.check_tomorrow(now))
+        self.assertEqual(self.sent, [])
+
+    def test_tomorrow_off(self):
+        nt, now = self._tomorrow([1] * 96, on_tomorrow=False)
+        self.assertIsNone(nt.check_tomorrow(now))
+        self.assertEqual(self.sent, [])
+
     def test_validation(self):
         for bad in ({"enabled": True, "topic": ""}, {"topic": "has space"}, {"server": "ntfy.sh"},
-                    {"click_url": "192.168.1.2"}, {"quiet_start_hour": 25}):
+                    {"click_url": "192.168.1.2"}, {"quiet_start_hour": 25},
+                    {"tomorrow_cheap_below": 25, "tomorrow_expensive_above": 20}):
             with self.subTest(bad=bad), self.assertRaises(ValueError):
                 Notifications(**bad)
 
