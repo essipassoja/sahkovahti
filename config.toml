@@ -24,34 +24,34 @@ vat_percent = 25.5        # VAT used by the price source — your own VAT rate i
 # All prices in c/kWh and fees in €/month WITHOUT VAT ("alv 0 %"); vat_percent is added on top of everything.
 
 # --- electricity contract (sähkösopimus) ---
-retailer_name         = ""
-retailer_margin_c_kwh = 0.39     # your electricity company's margin ("marginaali")
+retailer_name         = "Oomi"
+retailer_margin_c_kwh = 0.6      # your electricity company's margin ("marginaali")
 spot_discount_percent = 0.0      # e.g. 30 = you pay 70 % of the spot price ("-30 % pörssisähköstä")
 discount_until        = ""       # last day of the discount, "YYYY-MM-DD"; "" = no end date
 negative_spot_as_zero = false    # true if negative spot prices are billed as 0
 # "15min" = billed per 15-minute spot price (varttihinta)
 # "hour"  = billed per hour at the average of its four 15-min prices (tuntihinta) — check your contract
 price_resolution      = "15min"
-retailer_monthly_eur  = 0.0      # retailer basic fee (perusmaksu), €/month — normal price
+retailer_monthly_eur  = 4.96     # retailer basic fee (perusmaksu), €/month — normal price
 # Optional introductory basic fee, e.g. 0 €/month for the first 6 months. Leave out for none.
 # retailer_monthly_promo_eur   = 0.0
 retailer_monthly_promo_from  = ""   # first day, "YYYY-MM-DD"; "" = from the start
 retailer_monthly_promo_until = ""   # last day; after it the normal fee applies
 
 # --- grid / transfer (sähkönsiirto) ---
-grid_company          = ""
+grid_company          = "OSS"
 # flat      = yleissiirto: one price all the time (transfer_c_kwh)
 # day_night = aikasiirto: peak price between peak_start_hour and peak_end_hour every day
 # seasonal  = kausisiirto: peak price Nov–Mar, Mon–Sat between those hours; other times off-peak
 transfer_mode          = "flat"
-transfer_c_kwh         = 3.19    # flat transfer price ("siirtomaksu, energia")
+transfer_c_kwh         = 2.92    # flat transfer price ("siirtomaksu, energia")
 transfer_peak_c_kwh    = 0.0     # day / winter weekday price
 transfer_offpeak_c_kwh = 0.0     # night / other time price
 peak_start_hour        = 7
 peak_end_hour          = 22
-grid_monthly_eur       = 0.0     # grid basic fee (perusmaksu), €/month
+grid_monthly_eur       = 13.66   # grid basic fee (perusmaksu), €/month
 
-electricity_tax_c_kwh = 2.253    # electricity tax (sähkövero), class I, without VAT — the rate changes with budgets
+electricity_tax_c_kwh = 2.92     # electricity tax (sähkövero), class I, without VAT — the rate changes with budgets
 vat_percent           = 25.5     # VAT (arvonlisävero), added to spot, margin, transfer, tax and basic fees
 
 [weather]
