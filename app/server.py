@@ -17,6 +17,7 @@ from .db import DB
 from .meter import MeterService
 from .notify import Notifier, send
 from .prices import PriceUpdater
+from .ical import CalendarSource
 from .weather import Weather, geocode
 
 STATIC = Path(__file__).parent / "static"
@@ -33,6 +34,7 @@ class App:
                  notifier: Notifier | None = None):
         self.cfg, self.db, self.meter, self.prices, self.notifier = cfg, db, meter, prices, notifier
         self.weather_src = Weather(cfg)
+        self.calendar_src = CalendarSource(cfg)
         try:
             cfg.apply(self._saved_settings())
         except (TypeError, ValueError) as e:
@@ -131,6 +133,9 @@ class App:
     def weather(self, _q):
         return self.weather_src.get()
 
+    def calendar(self, _q):
+        return self.calendar_src.get()
+
     def outlook(self, _q):
         tomorrow = datetime.now(self.cfg.tz).date() + timedelta(days=1)
         return {"tomorrow": analysis.day_outlook(tomorrow, self.cfg, self.db)}
@@ -156,7 +161,8 @@ class App:
         nf = self.notifier
         return {
             "values": {"tariff": self.cfg.tariff.as_dict(), "traffic_light": self.cfg.light.as_dict(),
-                       "notifications": n, "weather": self.cfg.weather.as_dict()},
+                       "notifications": n, "weather": self.cfg.weather.as_dict(),
+                       "calendar": self.cfg.calendar.as_dict()},
             "saved": self._saved_settings(),
             "now": self._preview(self.cfg.tariff, self.cfg.light),
             "notifier": {"last_sent": nf.last_sent, "last_error": nf.last_error} if nf else None,
@@ -182,7 +188,7 @@ class App:
 
     def preview_settings(self, _q, body):
         try:
-            tariff, light, _n, _w = self.cfg.build(self._overrides(body))
+            tariff, light, *_ = self.cfg.build(self._overrides(body))
         except TypeError as e:
             raise ValueError(str(e)) from None
         return self._preview(tariff, light)
@@ -192,7 +198,7 @@ class App:
         o = self._overrides(body)
         o.setdefault("notifications", {})["enabled"] = True     # testing works before switching on
         try:
-            _t, _l, n, _w = self.cfg.build(o)
+            _t, _l, n, *_ = self.cfg.build(o)
         except TypeError as e:
             raise ValueError(str(e)) from None
         try:
@@ -222,6 +228,7 @@ class App:
         "/api/live": "live", "/api/day": "day", "/api/history": "history",
         "/api/power": "power", "/api/cheapest": "cheapest", "/api/status": "status",
         "/api/settings": "settings", "/api/weather": "weather", "/api/outlook": "outlook",
+        "/api/calendar": "calendar",
         "/api/geocode": "geocode",
     }
     POST_ROUTES = {

@@ -3,9 +3,15 @@
 A small local web app that shows your household's electricity use next to the Finnish
 15‑minute spot prices, and what it actually costs you.
 
-- **Front page for phone / tablet**: a green / yellow / red traffic light telling whether now is a good
-  time for big loads, plus price now and power now. Thresholds are set in `[traffic_light]` in `config.toml`.
-  Also the weather now and for the next hours from Yr (MET Norway).
+- **Front page for phone / tablet**: dashboards that rotate every 10 s (swipe, tap the dots or use the
+  arrow keys to switch):
+  - **Electricity**: a green / yellow / red traffic light telling whether now is a good time for big loads,
+    plus price now and power now. Thresholds are set in `[traffic_light]` in `config.toml`
+  - **Weather**: now, the next 24 hours and the next 3 days from Yr (MET Norway), with official FMI warnings
+  - **Calendar**: today and the coming days from your Google Calendar (or any iCal address)
+  - **Heads up**: dramatic weather ahead, and tomorrow's electricity once its prices are out
+    (very cheap / very expensive day, red periods)
+
   The detailed dashboard opens from the menu (or go to `/details`)
 - **Live**: power now, price now (spot + your margin, transfer and tax), €/h right now, per‑phase current
 - **Day view**: spot price and your consumption/cost for every 15‑minute slot, side by side
@@ -60,14 +66,27 @@ app, so costs for days before that show as "no prices stored".
 
 ## Weather
 
-The front page shows the weather now and the next 12 hours from [Yr](https://www.yr.no) (MET Norway's free
-[Locationforecast API](https://api.met.no/weatherapi/locationforecast/2.0/documentation), no key needed).
+The weather dashboard shows the weather now, the next 24 hours and the next 3 days from [Yr](https://www.yr.no)
+(MET Norway's free [Locationforecast API](https://api.met.no/weatherapi/locationforecast/2.0/documentation),
+no key needed), plus the Finnish Meteorological Institute's official
+[warnings](https://en.ilmatieteenlaitos.fi/warnings) for your location (Finland only).
 Set your location on **menu → Settings → Weather**: search for your town or street address (via
 [OpenStreetMap](https://www.openstreetmap.org)), or type the coordinates, and Save. You can also turn the weather off there.
 `[weather]` in `config.toml` holds the default (Helsinki). The app fetches the
 forecast at most every ~30 min, as MET's terms ask. On **Windows**, if the log says
 `CERTIFICATE_VERIFY_FAILED` for api.met.no, open <https://api.met.no> once in Edge (this installs the
 certificate authority it uses into Windows) and restart the app.
+
+## Calendar
+
+The calendar dashboard shows today's events and the next days (7 by default). In Google Calendar open
+**Settings → your calendar → Integrate calendar** and copy the **Secret address in iCal format**, then paste it
+on **menu → Settings → Calendar**, tick "Show my calendar" and Save; the line under the box tells whether
+it worked. Several calendars are fine, one address per line; any `.ics` / `webcal://` address works, not only
+Google's. The secret address works like a password (anyone who has it can read the calendar), so it is kept
+in the app's database and never shown on the front page or written to the log. Calendars are re-read every
+15 minutes. Repeating events, all-day and multi-day events, time zones and moved or cancelled single
+occurrences are handled; very unusual repeat rules may be shown approximately.
 
 ## Use it on your phone or tablet
 

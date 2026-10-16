@@ -225,6 +225,73 @@
     renderHeadsUp();
   }
 
+  // Calendar dashboard: today on the left, the next days on the right
+  const CAL_NEXT_MAX = 8;           // keeps the slide within a tablet screen
+  const dayName = (iso) => {
+    const t = Date.parse(iso + "T12:00:00Z") / 1000, now = Date.now() / 1000;
+    if (iso === isoDay(now + 86400)) return "Tomorrow";
+    return weekday(t, "long") + " " + dayMonth(t);
+  };
+
+  function calRow(e, today) {
+    const li = el("li");
+    li.dataset.cal = e.calendar % 6;
+    const now = Date.now() / 1000;
+    const time = el("div", "ct");
+    if (e.all_day) {
+      time.textContent = "All day";
+      if (e.last_date !== e.date) time.append(el("small", null, `until ${weekday(Date.parse(e.last_date + "T12:00:00Z") / 1000)}`));
+    } else {
+      time.textContent = hm(e.start);
+      if (e.end > e.start) time.append(el("small", "end", "–" + hm(e.end)));
+    }
+    const body = el("div", "cb");
+    body.append(el("strong", null, e.title));
+    if (e.location) body.append(el("span", null, e.location));
+    li.append(time, body);
+    if (today && !e.all_day) {
+      if (e.end <= now && e.end > e.start) li.classList.add("past");
+      else if (e.start <= now && now < e.end) body.prepend(el("span", "now", "Now"));
+    }
+    return li;
+  }
+
+  async function loadCalendar() {
+    let c;
+    try { c = await get("/api/calendar"); } catch { return; }
+    const show = !!c.enabled;
+    if ($("calendar").hidden === show) { $("calendar").hidden = !show; dash.refresh(); }
+    if (!show) return;
+    const today = c.today;
+    $("calTodayDate").textContent = dayMonth(Date.parse(today + "T12:00:00Z") / 1000);
+    // the server only sends events still going today or later, so "started on or before today" = today's
+    const todays = c.events.filter((e) => e.date <= today && (!e.all_day || e.last_date >= today));
+    $("calToday").replaceChildren(...(todays.length ? todays.map((e) => calRow(e, true))
+      : [el("li", "empty", "Nothing in the calendar today")]));
+
+    const later = c.events.filter((e) => e.date > today).slice(0, CAL_NEXT_MAX);
+    const groups = [];
+    for (const e of later) {
+      if (!groups.length || groups[groups.length - 1].date !== e.date) groups.push({ date: e.date, items: [] });
+      groups[groups.length - 1].items.push(e);
+    }
+    const rest = c.events.filter((e) => e.date > today).length - later.length;
+    const nodes = groups.map((g) => {
+      const box = el("section", "cal-day");
+      const list = el("ol", "cal-list");
+      list.append(...g.items.map((e) => calRow(e, false)));
+      box.append(el("h3", null, dayName(g.date)), list);
+      return box;
+    });
+    if (!groups.length) nodes.push(el("p", "empty", `Nothing else in the next ${c.days - 1} days`));
+    if (rest > 0) nodes.push(el("p", "more", `+ ${rest} more later`));
+    $("calNext").replaceChildren(...nodes);
+
+    const errors = c.calendars.filter((k) => k.error).map((k) => `${k.name}: ${k.error}`);
+    $("calFoot").hidden = !errors.length;
+    $("calFoot").textContent = errors.length ? "Couldn't update " + errors.join(" · ") : "";
+  }
+
   async function loadWeather() {
     let w;
     try { w = await get("/api/weather"); } catch { return; }
@@ -331,5 +398,7 @@
     setInterval(loadWeather, 15 * 60000);
     loadOutlook();
     setInterval(loadOutlook, 5 * 60000);
+    loadCalendar();
+    setInterval(loadCalendar, 60000);       // the server re-reads calendars every 15 min; this keeps "Now" current
   })();
 })();

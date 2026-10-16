@@ -32,7 +32,7 @@
   }
 
   function read() {
-    const out = { tariff: {}, traffic_light: {}, notifications: {}, weather: {} };
+    const out = { tariff: {}, traffic_light: {}, notifications: {}, weather: {}, calendar: {} };
     for (const el of form.elements) {
       if (!el.name || !el.name.includes(".")) continue;
       const [sec, key] = el.name.split(".");
@@ -129,6 +129,7 @@
     saved = d.topic_suggested ? "" : JSON.stringify(read());
     renderPreview(d.now);
     showNotifier(d.notifier);
+    checkCalendar();
     if (dirty()) setMsg("Save to keep the suggested notification topic", "warn");
   }
 
@@ -156,6 +157,24 @@
       $("testBtn").disabled = false;
     }
   };
+
+  // ---------- calendar: did the saved addresses work? ----------
+  async function checkCalendar() {
+    const msg = $("calMsg");
+    const set = (text, cls = "") => { msg.textContent = text || " "; msg.className = "msg wide " + cls; };
+    let d;
+    try {
+      const r = await fetch("/api/calendar", { cache: "no-store" });
+      d = await r.json();
+    } catch { set(""); return; }
+    if (!d.enabled) { set(""); return; }
+    const bad = d.calendars.filter((c) => c.error);
+    const lines = d.calendars.map((c) => c.error ? `${c.name}: ${c.error}`
+      : `${c.name}: OK`);
+    const count = d.events.length;
+    set(lines.join(" · ") + (bad.length ? "" : ` — ${count} event${count === 1 ? "" : "s"} in the next ${d.days} days`),
+      bad.length ? "bad" : "ok");
+  }
 
   // ---------- weather location ----------
   function setWx(text, cls = "") { $("wxMsg").textContent = text; $("wxMsg").className = "msg " + cls; }
@@ -226,6 +245,7 @@
       saved = JSON.stringify(read());
       renderPreview(d.now);
       setMsg("Saved ✓", "ok");
+      checkCalendar();
     } catch (err) {
       setMsg(friendly(err.message), "bad");
     } finally {

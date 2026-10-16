@@ -314,8 +314,47 @@ class WeatherSettings:
         return {k: getattr(self, k) for k in self.keys()}
 
 
+@dataclass
+class CalendarSettings:
+    """Front-page calendar from one or more iCal (.ics) addresses, e.g. Google Calendar's
+    "Secret address in iCal format". Anyone with such an address can read the calendar."""
+    enabled: bool = False
+    ical_urls: str = ""            # one address per line
+    days: int = 7                  # how far ahead to show
+
+    def __post_init__(self):
+        if not isinstance(self.enabled, bool):
+            raise ValueError("enabled must be true or false")
+        lines = [u.strip() for u in str(self.ical_urls or "").splitlines() if u.strip()]
+        # webcal:// is just https:// for calendar apps
+        lines = ["https://" + u[len("webcal://"):] if u.lower().startswith("webcal://") else u for u in lines]
+        for u in lines:
+            if not re.match(r"^https?://[^\s/]+/\S*$", u):
+                raise ValueError("ical_urls: each line must be an address starting with https://")
+        if len(lines) > 10:
+            raise ValueError("ical_urls: at most 10 calendars")
+        self.ical_urls = "\n".join(lines)
+        v = _num("days", self.days, 1, 31)
+        if v != int(v):
+            raise ValueError("days must be a whole number")
+        self.days = int(v)
+        if self.enabled and not lines:
+            raise ValueError("ical_urls: add at least one calendar address, or switch the calendar off")
+
+    @property
+    def urls(self) -> list[str]:
+        return self.ical_urls.split("\n") if self.ical_urls else []
+
+    @classmethod
+    def keys(cls) -> list[str]:
+        return [f.name for f in fields(cls)]
+
+    def as_dict(self) -> dict:
+        return {k: getattr(self, k) for k in self.keys()}
+
+
 SECTIONS = {"tariff": Tariff, "traffic_light": TrafficLight, "notifications": Notifications,
-            "weather": WeatherSettings}
+            "weather": WeatherSettings, "calendar": CalendarSettings}
 
 
 @dataclass
@@ -329,6 +368,7 @@ class Config:
     light: TrafficLight = field(default_factory=TrafficLight)
     notify: Notifications = field(default_factory=Notifications)
     weather: WeatherSettings = field(default_factory=WeatherSettings)
+    calendar: CalendarSettings = field(default_factory=CalendarSettings)
     prices: dict = field(default_factory=dict)
     meter: dict = field(default_factory=dict)
 
@@ -336,7 +376,8 @@ class Config:
         """Settings sections from config.toml, before settings-page overrides."""
         return {k: self.raw.get(k, {}) for k in SECTIONS}
 
-    def build(self, overrides: dict | None) -> tuple[Tariff, TrafficLight, Notifications, WeatherSettings]:
+    def build(self, overrides: dict | None) -> tuple[Tariff, TrafficLight, Notifications, WeatherSettings,
+                                                     CalendarSettings]:
         """Validate config.toml values + overrides; raises ValueError with a readable message."""
         o, d = overrides or {}, self.defaults()
         for section, cls in SECTIONS.items():
@@ -348,10 +389,11 @@ class Config:
         light = TrafficLight(**{**d["traffic_light"], **o.get("traffic_light", {})})
         notify = Notifications(**{**d["notifications"], **o.get("notifications", {})})
         weather = WeatherSettings(**{**d["weather"], **o.get("weather", {})})
-        return tariff, light, notify, weather
+        calendar = CalendarSettings(**{**d["calendar"], **o.get("calendar", {})})
+        return tariff, light, notify, weather, calendar
 
     def apply(self, overrides: dict | None) -> None:
-        self.tariff, self.light, self.notify, self.weather = self.build(overrides)
+        self.tariff, self.light, self.notify, self.weather, self.calendar = self.build(overrides)
 
 
 def load(path: str | Path | None = None) -> Config:
@@ -369,6 +411,7 @@ def load(path: str | Path | None = None) -> Config:
         light = TrafficLight(**raw.get("traffic_light", {}))
         notify = Notifications(**raw.get("notifications", {}))
         weather = WeatherSettings(**raw.get("weather", {}))
+        calendar = CalendarSettings(**raw.get("calendar", {}))
     except (TypeError, ValueError) as e:
         raise SystemExit(f"config.toml: {e}") from None
     return Config(
@@ -381,6 +424,7 @@ def load(path: str | Path | None = None) -> Config:
         light=light,
         notify=notify,
         weather=weather,
+        calendar=calendar,
         prices=raw.get("prices", {}),
         meter=raw.get("meter", {}),
     )

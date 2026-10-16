@@ -18,6 +18,8 @@ from app.meter.base import Reading  # noqa: E402
 from app.meter.p1 import TelegramAssembler, check_crc, crc16, parse_telegram  # noqa: E402
 from app.prices import parse_porssisahko  # noqa: E402
 from app.weather import parse_warnings, summarize  # noqa: E402
+from app.ical import expand, parse  # noqa: E402
+from app.config import CalendarSettings  # noqa: E402
 
 BODY = (
     "/ADN9 6534\r\n"
@@ -612,6 +614,130 @@ class WeatherTest(unittest.TestCase):
         ws = parse_warnings(xml, 60.1699, 24.9384, now)
         self.assertEqual([w["headline"] for w in ws], ["new warning", "also warning"])   # orange first
         self.assertEqual(ws[0]["color"], "orange")
+
+ICS = """BEGIN:VCALENDAR
+VERSION:2.0
+X-WR-CALNAME:Home
+BEGIN:VEVENT
+UID:dentist
+DTSTART;TZID=Europe/Helsinki:20261019T090000
+DTEND;TZID=Europe/Helsinki:20261019T100000
+SUMMARY:Dentist\\, check-up
+LOCATION:Kamppi
+BEGIN:VALARM
+TRIGGER:-PT15M
+SUMMARY:alarm text that must not leak
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+UID:utc
+DTSTART:20261020T150000Z
+DURATION:PT30M
+SUMMARY:Call with a very long title that is folded
+  onto the next line
+END:VEVENT
+BEGIN:VEVENT
+UID:trip
+DTSTART;VALUE=DATE:20261017
+DTEND;VALUE=DATE:20261020
+SUMMARY:Cottage trip
+END:VEVENT
+BEGIN:VEVENT
+UID:yoga
+DTSTART;TZID=Europe/Helsinki:20261005T180000
+DTEND;TZID=Europe/Helsinki:20261005T190000
+RRULE:FREQ=WEEKLY;BYDAY=MO,WE
+EXDATE;TZID=Europe/Helsinki:20261021T180000
+SUMMARY:Yoga
+END:VEVENT
+BEGIN:VEVENT
+UID:yoga
+RECURRENCE-ID;TZID=Europe/Helsinki:20261026T180000
+DTSTART;TZID=Europe/Helsinki:20261027T170000
+DTEND;TZID=Europe/Helsinki:20261027T180000
+SUMMARY:Yoga (moved)
+END:VEVENT
+BEGIN:VEVENT
+UID:sauna
+DTSTART;TZID=Europe/Helsinki:20260130T200000
+DTEND;TZID=Europe/Helsinki:20260130T210000
+RRULE:FREQ=MONTHLY;BYDAY=-1FR
+SUMMARY:Sauna evening
+END:VEVENT
+BEGIN:VEVENT
+UID:bday
+DTSTART;VALUE=DATE:19900122
+RRULE:FREQ=YEARLY;BYMONTH=10;BYMONTHDAY=24
+SUMMARY:Birthday
+END:VEVENT
+BEGIN:VEVENT
+UID:short
+DTSTART;TZID=Europe/Helsinki:20261012T080000
+RRULE:FREQ=DAILY;COUNT=8
+SUMMARY:Course
+END:VEVENT
+BEGIN:VEVENT
+UID:ended
+DTSTART;TZID=Europe/Helsinki:20261001T120000
+RRULE:FREQ=DAILY;UNTIL=20261017T235959Z
+SUMMARY:Lunch shift
+END:VEVENT
+BEGIN:VEVENT
+UID:gone
+DTSTART;TZID=Europe/Helsinki:20261018T120000
+STATUS:CANCELLED
+SUMMARY:Cancelled thing
+END:VEVENT
+END:VCALENDAR
+"""
+
+
+class CalendarTests(unittest.TestCase):
+    def _events(self, d0="2026-10-16", d1="2026-10-29"):
+        name, raw = parse(ICS)
+        self.assertEqual(name, "Home")
+        return expand(raw, date.fromisoformat(d0), date.fromisoformat(d1), HEL)
+
+    def _local(self, e):
+        return datetime.fromtimestamp(e["start"], HEL).strftime("%a %d.%m %H:%M")
+
+    def test_single_events(self):
+        ev = {e["title"]: e for e in self._events()}
+        self.assertEqual(self._local(ev["Dentist, check-up"]), "Mon 19.10 09:00")
+        self.assertEqual(ev["Dentist, check-up"]["location"], "Kamppi")
+        self.assertIn("Call with a very long title that is folded onto the next line", ev)   # folded line
+        self.assertEqual(self._local(ev["Call with a very long title that is folded onto the next line"]),
+                         "Tue 20.10 18:00")                                             # UTC → Helsinki
+        trip = ev["Cottage trip"]
+        self.assertEqual((trip["all_day"], trip["date"], trip["last_date"]), (True, "2026-10-17", "2026-10-19"))
+        self.assertNotIn("Cancelled thing", ev)
+        self.assertFalse(any("alarm" in t for t in ev))
+
+    def test_repeating(self):
+        evs = self._events()
+        when = lambda title: [self._local(e) for e in evs if e["title"] == title]   # noqa: E731
+        # Mon/Wed, 21.10 skipped, 26.10 moved to Tue; still 18:00 after DST ends on 25.10
+        self.assertEqual(when("Yoga"), ["Mon 19.10 18:00", "Wed 28.10 18:00"])
+        self.assertEqual(when("Yoga (moved)"), ["Tue 27.10 17:00"])
+        self.assertEqual(when("Sauna evening"), [])            # last Friday is 30.10, outside the window
+        self.assertEqual(when("Course"), ["Fri 16.10 08:00", "Sat 17.10 08:00", "Sun 18.10 08:00",
+                                          "Mon 19.10 08:00"])         # COUNT=8 from 12.10
+        self.assertEqual(when("Lunch shift"), ["Fri 16.10 12:00", "Sat 17.10 12:00"])
+        self.assertEqual([e["date"] for e in evs if e["title"] == "Birthday"], ["2026-10-24"])
+        self.assertEqual([self._local(e) for e in self._events("2026-10-30", "2026-10-30")
+                          if e["title"] == "Sauna evening"], ["Fri 30.10 20:00"])
+
+    def test_event_already_going_is_kept(self):
+        titles = [e["title"] for e in self._events("2026-10-18", "2026-10-18")]
+        self.assertIn("Cottage trip", titles)        # started the day before
+
+    def test_settings(self):
+        c = CalendarSettings(enabled=True, ical_urls=" webcal://calendar.google.com/x/basic.ics \n\n")
+        self.assertEqual(c.urls, ["https://calendar.google.com/x/basic.ics"])
+        for bad in ({"ical_urls": "not a url"}, {"enabled": True}, {"days": 0}, {"days": 2.5}):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                CalendarSettings(**bad)
+
 
 if __name__ == "__main__":
     unittest.main()

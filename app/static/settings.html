@@ -191,6 +191,21 @@
           <input name="weather.longitude" type="number" step="0.0001" min="-180" max="180" inputmode="decimal" required>
           <small>e.g. 24.9384</small></label>
       </fieldset>
+
+      <fieldset class="panel">
+        <legend>Calendar <span class="muted">front page · Google Calendar or any iCal address</span></legend>
+        <label class="check wide"><input name="calendar.enabled" type="checkbox">
+          <span>Show my calendar on the front page</span></label>
+        <label class="field wide">Calendar addresses <span class="unit">one per line</span>
+          <textarea name="calendar.ical_urls" rows="3" spellcheck="false" autocomplete="off"
+            placeholder="https://calendar.google.com/calendar/ical/…/private-…/basic.ics"></textarea>
+          <small>In Google Calendar: <b>Settings → your calendar → Integrate calendar → Secret address in iCal format</b>.
+            Treat it like a password: anyone with the address can read the calendar.</small></label>
+        <label class="field">Days ahead
+          <input name="calendar.days" type="number" min="1" max="31" step="1" inputmode="numeric" required>
+          <small>Today plus the next days, 1–31</small></label>
+        <p class="msg wide" id="calMsg" role="status">&nbsp;</p>
+      </fieldset>
     </div>
 
     <aside class="settings-side">
@@ -219,7 +234,7 @@
   </div>
   <a href="/">Now<small>Traffic light, price and consumption</small></a>
   <a href="/details">Details<small>Day charts, power history, cheapest windows, monthly totals</small></a>
-  <a href="/settings" aria-current="page">Settings<small>Your contract, transfer prices, traffic light and weather location</small></a>
+  <a href="/settings" aria-current="page">Settings<small>Your contract, transfer prices, traffic light, weather and calendar</small></a>
 </nav>
 <div class="scrim" id="scrim" hidden></div>
 <script src="/static/nav.js"></script>

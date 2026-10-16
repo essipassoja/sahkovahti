@@ -229,6 +229,44 @@ button.ghost { background: transparent; }
 .wx-warn .tag { flex: none; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; background: var(--wc); color: #1d1d1b; }
 .wx-warn p { margin: 4px 0 0 28px; font-size: 14px; color: var(--text-2); }
 
+/* calendar dashboard */
+.cal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 24px;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 18px 32px; align-items: start; }
+.cal-card h2 { font-size: 24px; letter-spacing: -0.02em; margin-bottom: 12px; }
+.cal-card h2 span { font-size: 16px; font-weight: 500; color: var(--text-2); letter-spacing: 0; margin-left: 4px; }
+.cal-next h2 { color: var(--text-2); font-size: 20px; }
+.cal-day h3 { margin: 0 0 6px; font-size: 14px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+.cal-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cal-list li { --cc: var(--use); display: flex; gap: 14px; align-items: baseline; padding: 10px 14px; border-radius: 14px;
+  background: color-mix(in srgb, var(--text) 4%, transparent); border-left: 5px solid var(--cc); }
+.cal-list li[data-cal="1"] { --cc: var(--price); }
+.cal-list li[data-cal="2"] { --cc: var(--lamp-green); }
+.cal-list li[data-cal="3"] { --cc: #8a5cd1; }
+.cal-list li[data-cal="4"] { --cc: var(--lamp-yellow); }
+.cal-list li[data-cal="5"] { --cc: #d04f8f; }
+.cal-list li.past { opacity: .45; }
+.cal-list li.empty { border-left-color: transparent; color: var(--text-2); }
+.cal-list .ct { flex: none; width: 4.6em; font-weight: 650; font-variant-numeric: tabular-nums; font-size: 16px; }
+.cal-list .ct small { display: block; font-weight: 400; font-size: 13px; color: var(--text-2); }
+.cal-list .cb { min-width: 0; }
+.cal-list .cb strong { display: block; font-size: 17px; overflow-wrap: anywhere; }
+.cal-list .cb span:not(.now) { display: block; font-size: 14px; color: var(--text-2); }
+.cal-list .now { display: inline-block; font-size: 12px; font-weight: 600; padding: 1px 8px; border-radius: 999px; margin-bottom: 3px;
+  background: var(--cc); color: #fff; }
+.cal-today .cal-list .ct { font-size: 18px; }
+.cal-today .cal-list .cb strong { font-size: 19px; }
+/* coming up: one line per event so a week fits on a tablet */
+.cal-next .cal-list { gap: 5px; }
+.cal-next .cal-list li { padding: 7px 12px; border-left-width: 4px; }
+.cal-next .cal-list .ct small.end { display: none; }
+.cal-next .cal-list .ct small { display: inline; margin-left: 4px; }
+.cal-next .cal-list .ct { width: auto; min-width: 3.4em; font-size: 15px; }
+.cal-next .cal-list .cb strong { display: inline; font-size: 16px; }
+.cal-next .cal-list .cb span:not(.now) { display: inline; margin-left: 8px; font-size: 13.5px; }
+.cal-day + .cal-day { margin-top: 10px; }
+.cal-next .empty, .cal-next .more { margin: 8px 0 0; color: var(--text-2); font-size: 14px; }
+.cal-foot { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--bad); }
+
 /* heads-up dashboard: warnings, dramatic weather, tomorrow's electricity */
 .hu-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 24px; display: grid; gap: 18px; }
 .hu-title { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
@@ -286,6 +324,7 @@ button.ghost { background: transparent; }
 .sim-note { margin: 0; text-align: center; font-size: 13px; color: var(--muted); }
 
 @media (max-width: 860px) {
+  .cal-card { grid-template-columns: 1fr; }
   .wx-next { grid-template-columns: repeat(4, 1fr); }
   .wx-top { grid-template-columns: 1fr; }
   .big-tiles { grid-template-columns: 1fr 1fr; }
@@ -318,14 +357,15 @@ button.ghost { background: transparent; }
 .settings fieldset.panel { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 16px; margin: 0 0 16px; min-width: 0; }
 .settings legend { font-weight: 650; font-size: 16px; padding: 0 6px; margin-left: -6px; }
 .field { display: block; font-size: 14px; font-weight: 600; min-width: 0; }
-.field > input, .field > select, .field > small, .field .modes, .field .hours-row { display: block; margin-top: 6px; }
+.field > input, .field > select, .field > textarea, .field > small, .field .modes, .field .hours-row { display: block; margin-top: 6px; }
 .field .hours-row, .field .modes { display: flex; }
 .settings fieldset > .wide { grid-column: 1 / -1; }
 .field .unit { font-weight: 400; color: var(--muted); font-size: 12.5px; margin-left: 3px; }
 .field small, .check small { font-weight: 400; color: var(--text-2); font-size: 12.5px; }
-.field input, .field select { font: inherit; font-weight: 400; font-size: 15px; color: var(--text); background: var(--bg);
+.field input, .field select, .field textarea { font: inherit; font-weight: 400; font-size: 15px; color: var(--text); background: var(--bg);
   border: 1px solid var(--border); border-radius: 9px; padding: 9px 11px; width: 100%; min-width: 0; }
-.field input:focus, .field select:focus { outline: 2px solid color-mix(in srgb, var(--use) 55%, transparent); outline-offset: 1px; border-color: var(--use); }
+.field textarea { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 13px; resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid color-mix(in srgb, var(--use) 55%, transparent); outline-offset: 1px; border-color: var(--use); }
 .check { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; font-weight: 600; cursor: pointer; }
 .check input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--use); flex: none; }
 .check small { display: block; margin-top: 2px; }
