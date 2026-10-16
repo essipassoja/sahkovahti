@@ -101,6 +101,8 @@ class App:
         now = int(time.time())
         bucket = 10 if minutes <= 60 else 60 if minutes <= 720 else 300
         rows = self.db.power_series(now - minutes * 60, now + 1, bucket)
+        last = rows[-1][0] if rows else 0
+        rows += [r for r in self.meter.pending_power(now - minutes * 60, bucket) if r[0] > last]
         return {"bucket_s": bucket, "points": [(t, round(p or 0), round(e or 0)) for t, p, e in rows]}
 
     def cheapest(self, _q):

@@ -3,6 +3,8 @@
 """
 import argparse
 import logging
+import signal
+import sys
 
 from . import config
 from .db import DB
@@ -29,7 +31,14 @@ def main():
     prices.start()
     meter.start()
     notifier.start()
-    serve(app)
+    # systemd stops the service with SIGTERM: exit cleanly so buffered readings get written
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    try:
+        serve(app)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        meter.flush()
 
 
 if __name__ == "__main__":

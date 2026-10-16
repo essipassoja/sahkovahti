@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS readings (
     export_kwh     REAL,           -- cumulative counter (2.8.0)
     power_w        REAL,           -- instantaneous import (1.7.0)
     export_power_w REAL,           -- instantaneous export (2.7.0)
-    extra          TEXT            -- JSON: phase currents/voltages etc.
+    extra          TEXT            -- unused since phase values are kept in memory only (always NULL)
 );
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
 """
@@ -31,7 +31,9 @@ class DB:
     def __init__(self, path: Path):
         path.parent.mkdir(parents=True, exist_ok=True)
         self._conn = sqlite3.connect(path, check_same_thread=False)
+        self._conn.execute("PRAGMA auto_vacuum=INCREMENTAL")   # takes effect on a new file only
         self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA synchronous=NORMAL")   # safe with WAL, fewer flushes to the SD card
         self._conn.executescript(SCHEMA)
         self._lock = threading.Lock()
 
@@ -77,16 +79,11 @@ class DB:
         self.insert_readings([r])
 
     def insert_readings(self, readings) -> None:
+        # phase values (r.extra) are not stored: only the live view shows them, from memory
         self._xm(
-            "INSERT OR REPLACE INTO readings(ts,import_kwh,export_kwh,power_w,export_power_w,extra)"
-            " VALUES(?,?,?,?,?,?)",
-            [
-                (
-                    int(r.ts), r.import_kwh, r.export_kwh, r.power_w, r.export_power_w,
-                    json.dumps(r.extra) if r.extra else None,
-                )
-                for r in readings
-            ],
+            "INSERT OR REPLACE INTO readings(ts,import_kwh,export_kwh,power_w,export_power_w)"
+            " VALUES(?,?,?,?,?)",
+            [(int(r.ts), r.import_kwh, r.export_kwh, r.power_w, r.export_power_w) for r in readings],
         )
 
     def latest_reading(self):
@@ -101,6 +98,35 @@ class DB:
             "ts": ts, "import_kwh": imp, "export_kwh": exp, "power_w": p,
             "export_power_w": ep, "extra": json.loads(extra) if extra else {},
         }
+
+    def compact(self, before: int) -> int:
+        """Thin out readings older than `before`; returns the number of rows deleted.
+
+        Per 15-min slot only the first and last reading with each counter are kept. Those are
+        exactly the readings energy_per_slot interpolates between at the slot boundaries, so
+        every 15-min and hourly figure stays the same; only the old power curve loses detail.
+        """
+        before -= before % QUARTER
+        keep = " UNION ".join(
+            f"SELECT {f}(ts) FROM readings WHERE ts<:b AND {c} IS NOT NULL GROUP BY ts/{QUARTER}"
+            for f in ("MIN", "MAX") for c in ("import_kwh", "export_kwh")
+        )
+        with self._lock, self._conn:
+            cur = self._conn.execute(
+                f"DELETE FROM readings WHERE ts<:b AND ts NOT IN ({keep})", {"b": before})
+            self._conn.execute("UPDATE readings SET extra=NULL WHERE extra IS NOT NULL")
+            return cur.rowcount
+
+    def reclaim_space(self) -> None:
+        """Give the space of deleted rows back to the file system."""
+        with self._lock:
+            if self._conn.execute("PRAGMA auto_vacuum").fetchone()[0] != 2:
+                # database made before auto_vacuum was on: switch once (VACUUM rewrites the file)
+                self._conn.execute("PRAGMA auto_vacuum=INCREMENTAL")
+                self._conn.execute("VACUUM")
+            else:
+                self._conn.execute("PRAGMA incremental_vacuum")
+            self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
 
     def reading_count(self) -> int:
         return self._q("SELECT COUNT(*) FROM readings")[0][0]

@@ -78,6 +78,12 @@ basis = "spot"
 source = "simulator"
 # How often a reading is written to the database (the meter sends every ~1–10 s)
 store_interval_s = 10
+# Readings are buffered in memory and written in one go this often (seconds) — fewer writes
+# spare the SD card. The day view and power chart can lag this much; a power cut loses at most this.
+write_interval_s = 60
+# Full detail is kept this many days (the power chart shows up to 2). Older readings are thinned
+# to the ones at each 15-min boundary, so costs and kWh stay exact and the database stays small.
+keep_detail_days = 3
 # Simulator only: generate this many days of fake history on first start
 simulator_backfill_days = 14
 

@@ -128,9 +128,16 @@ The meter's cumulative counter (`1.8.0`, kWh) is the source of truth. For each 1
 counter value at the slot boundaries is interpolated from the nearest readings, so energy lands in the
 correct slot even when readings arrive irregularly; gaps over an hour show as missing rather than
 guessed. Cost per slot = kWh × (spot + margin + transfer + tax). Data is stored in SQLite
-(`data/energy.db`, about 600 MB per year at the default 10‑second storage interval, or ~100 MB
-with `store_interval_s = 60` — the 15‑minute figures are equally accurate either way, since they
-come from the counter).
+(`data/energy.db`). To keep it small and spare a Raspberry Pi's SD card:
+
+- readings are buffered in memory and written once a minute (`write_interval_s` in `[meter]`), so the
+  day view and power chart can lag up to a minute (the live values don't) and a power cut loses at most that;
+- full 10‑second detail is kept for 3 days (`keep_detail_days`; the power chart shows up to 2). Once a day
+  older readings are thinned to the ones at each 15‑min boundary, which keeps every kWh and cost figure
+  exact. The database grows only a few MB per year;
+- per-phase values are shown live but not stored.
+
+The first start after upgrading thins out the whole existing history once, which can take a minute on a Pi.
 
 ## API
 

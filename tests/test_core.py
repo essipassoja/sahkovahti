@@ -115,6 +115,74 @@ class EnergyTests(unittest.TestCase):
             self.assertAlmostEqual(out[0], 1.0)
             self.assertIsNone(out[1])  # 2.25 h gap without readings
 
+    def test_compact_keeps_slot_energy(self):
+        import random
+        rnd = random.Random(1)
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            db = DB(Path(d) / "t.db")
+            t, kwh, rs = 0, 100.0, []
+            while t < 3 * 86400:
+                kwh += rnd.random() * 0.01
+                rs.append(Reading(ts=t, import_kwh=kwh, export_kwh=kwh / 10 if t % 3 else None,
+                                  power_w=1000, extra={"l1_v": 230.0}))
+                t += rnd.choice([1, 7, 10, 13] * 50 + [900, 1800]) if t < 2 * 86400 else rnd.randint(1, 30)
+                if rnd.random() < 0.002:
+                    t += 5000   # outage longer than max_gap
+            db.insert_readings(rs)
+            bounds = list(range(0, 3 * 86400 + 900, 900))
+            before = {c: db.energy_per_slot(bounds, c) for c in ("import_kwh", "export_kwh")}
+            n_all = db.reading_count()
+            deleted = db.compact(2 * 86400 + 123)
+            db.reclaim_space()
+            self.assertGreater(deleted, n_all // 2)
+            self.assertEqual(db.reading_count(), n_all - deleted)
+            for c in before:
+                self.assertEqual(db.energy_per_slot(bounds, c), before[c])
+            self.assertEqual(db._q("PRAGMA auto_vacuum")[0][0], 2)
+            # recent readings keep full detail
+            self.assertEqual(db._q("SELECT COUNT(*) FROM readings WHERE ts>=?", (2 * 86400,))[0][0],
+                             sum(1 for r in rs if r.ts >= 2 * 86400))
+            self.assertEqual(db.compact(2 * 86400), 0)   # running again changes nothing
+
+    def test_old_database_switches_to_incremental_vacuum(self):
+        import sqlite3
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            path = Path(d) / "t.db"
+            c = sqlite3.connect(path)
+            c.execute("PRAGMA journal_mode=WAL")
+            c.execute("CREATE TABLE readings (ts INTEGER PRIMARY KEY, import_kwh REAL, export_kwh REAL,"
+                      " power_w REAL, export_power_w REAL, extra TEXT)")
+            c.executemany("INSERT INTO readings VALUES(?,?,?,?,?,?)",
+                          [(t, t / 1000, None, 1.0, 0.0, '{"l1_v": 230.0}' * 5) for t in range(0, 86400, 10)])
+            c.commit()
+            c.close()
+            db = DB(path)
+            self.assertEqual(db._q("PRAGMA auto_vacuum")[0][0], 0)
+            db.compact(86400)
+            db.reclaim_space()
+            self.assertEqual(db._q("PRAGMA auto_vacuum")[0][0], 2)
+            self.assertEqual(db._q("SELECT COUNT(*) FROM readings WHERE extra IS NOT NULL")[0][0], 0)
+            self.assertLess(path.stat().st_size, 100_000)
+
+
+class MeterServiceTests(unittest.TestCase):
+    def test_readings_buffered_until_flush(self):
+        from app.meter import MeterService
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as d:
+            db = DB(Path(d) / "t.db")
+            from types import SimpleNamespace
+            cfg = SimpleNamespace(tz=ZoneInfo("Europe/Helsinki"),
+                                  meter={"source": "simulator", "simulator_backfill_days": 0, "store_interval_s": 10})
+            m = MeterService(cfg, db)
+            for t in range(1000, 1100, 5):
+                m.on_reading(Reading(ts=t, import_kwh=t / 100, power_w=500, extra={"l1_v": 230.0}))
+            self.assertEqual(db.reading_count(), 0)
+            self.assertEqual(m.pending_power(0, 60), [(960, 500.0, None), (1020, 500.0, None), (1080, 500.0, None)])
+            m.flush()
+            self.assertEqual(db.reading_count(), 10)
+            self.assertEqual(db.latest_reading()["extra"], {})
+            self.assertEqual(m._pending, [])
+
 
 class TrafficLightTests(unittest.TestCase):
     def test_levels_and_boundaries(self):
