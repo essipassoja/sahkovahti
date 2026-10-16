@@ -28,51 +28,59 @@
     <div class="status" id="status"><span class="dot"></span><span id="statusText">Connecting…</span></div>
   </header>
 
-  <main class="simple">
-    <section class="light-card" id="lightCard" data-level="none" aria-live="polite">
-      <div class="lamps" aria-hidden="true">
-        <span class="lamp red"></span><span class="lamp yellow"></span><span class="lamp green"></span>
-      </div>
-      <div class="verdict">
-        <h2 id="verdict">Loading…</h2>
-        <p id="advice">&nbsp;</p>
-        <p class="next" id="nextChange">&nbsp;</p>
-        <p class="legend" id="legend">&nbsp;</p>
-      </div>
-    </section>
-
-    <section class="big-tiles" aria-label="Right now">
-      <div class="big-tile">
-        <div class="label" id="spotLabel">Spot price now</div>
-        <div class="value"><span id="spotNow">–</span><small>c/kWh</small></div>
-        <div class="sub" id="spotSub">&nbsp;</div>
-      </div>
-      <div class="big-tile">
-        <div class="label">Price now</div>
-        <div class="value"><span id="priceNow">–</span><small>c/kWh</small></div>
-        <div class="sub" id="priceSub">&nbsp;</div>
-      </div>
-      <div class="big-tile">
-        <div class="label">Using now</div>
-        <div class="value"><span id="powerNow">–</span><small id="powerUnit">kW</small></div>
-        <div class="sub" id="powerSub">&nbsp;</div>
-      </div>
-    </section>
-
-    <section class="weather-card" id="weather" aria-label="Weather" hidden>
-      <div class="wx-now">
-        <span class="wx-icon" id="wxIcon" aria-hidden="true"></span>
-        <div>
-          <div class="label" id="wxPlace">Weather now</div>
-          <div class="wx-temp"><span id="wxTemp">–</span><small>°C</small></div>
-          <div class="sub" id="wxDesc">&nbsp;</div>
+  <main class="dash">
+    <div class="dots" id="dots" role="tablist" aria-label="Dashboards"></div>
+    <div class="slides" id="slides">
+      <section class="slide simple" id="slideElec" aria-roledescription="dashboard" aria-label="Electricity">
+        <div class="light-card" id="lightCard" data-level="none" aria-live="polite">
+          <div class="lamps" aria-hidden="true">
+            <span class="lamp red"></span><span class="lamp yellow"></span><span class="lamp green"></span>
+          </div>
+          <div class="verdict">
+            <h2 id="verdict">Loading…</h2>
+            <p id="advice">&nbsp;</p>
+            <p class="next" id="nextChange">&nbsp;</p>
+            <p class="legend" id="legend">&nbsp;</p>
+          </div>
         </div>
-      </div>
-      <ol class="wx-next" id="wxNext"></ol>
-      <p class="wx-credit">Weather from <a href="https://www.yr.no/" target="_blank" rel="noopener">Yr</a>, data by MET Norway</p>
-    </section>
 
-    <p class="sim-note" id="simNote" hidden>Consumption is simulated until the HAN reader is connected. Prices are real.</p>
+        <div class="big-tiles" aria-label="Right now">
+          <div class="big-tile">
+            <div class="label" id="spotLabel">Spot price now</div>
+            <div class="value"><span id="spotNow">–</span><small>c/kWh</small></div>
+            <div class="sub" id="spotSub">&nbsp;</div>
+          </div>
+          <div class="big-tile">
+            <div class="label">Price now</div>
+            <div class="value"><span id="priceNow">–</span><small>c/kWh</small></div>
+            <div class="sub" id="priceSub">&nbsp;</div>
+          </div>
+          <div class="big-tile">
+            <div class="label">Using now</div>
+            <div class="value"><span id="powerNow">–</span><small id="powerUnit">kW</small></div>
+            <div class="sub" id="powerSub">&nbsp;</div>
+          </div>
+        </div>
+
+        <p class="sim-note" id="simNote" hidden>Consumption is simulated until the HAN reader is connected. Prices are real.</p>
+      </section>
+
+      <section class="slide" id="weather" aria-roledescription="dashboard" aria-label="Weather" hidden>
+        <div class="weather-card">
+          <div class="wx-now">
+            <span class="wx-icon" id="wxIcon" aria-hidden="true"></span>
+            <div>
+              <div class="label" id="wxPlace">Weather now</div>
+              <div class="wx-temp"><span id="wxTemp">–</span><small>°C</small></div>
+              <div class="sub" id="wxDesc">&nbsp;</div>
+            </div>
+          </div>
+          <h2 class="wx-head">Next 24 hours</h2>
+          <ol class="wx-next" id="wxNext"></ol>
+          <p class="wx-credit">Weather from <a href="https://www.yr.no/" target="_blank" rel="noopener">Yr</a>, data by MET Norway</p>
+        </div>
+      </section>
+    </div>
   </main>
 </div>
 

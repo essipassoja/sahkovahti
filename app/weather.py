@@ -124,4 +124,4 @@ class Weather:
         if payload is None:
             return {"enabled": True, "error": self.last_error or "no data"}
         return {"enabled": True, "place": w.place,
-                **summarize(payload, time.time())}
+                **summarize(payload, time.time(), hours=24)}

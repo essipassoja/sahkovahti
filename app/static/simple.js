@@ -113,8 +113,9 @@
   async function loadWeather() {
     let w;
     try { w = await get("/api/weather"); } catch { return; }
-    if (!w.enabled || !w.now) { $("weather").hidden = true; return; }
-    $("weather").hidden = false;
+    const show = !!(w.enabled && w.now);
+    if ($("weather").hidden === show) { $("weather").hidden = !show; dash.refresh(); }
+    if (!show) return;
     const [icon, text] = wx(w.now.symbol);
     $("wxIcon").textContent = icon;
     $("wxPlace").textContent = w.place ? `Weather in ${w.place}` : "Weather now";
@@ -125,16 +126,79 @@
       const li = document.createElement("li");
       const [i, t] = wx(p.symbol);
       li.title = t;
-      li.innerHTML = `<div class="t"></div><div class="i"></div><div class="v"></div><div class="p"></div>`;
+      li.innerHTML = `<div class="t"></div><div class="i"></div><div class="v"></div><div class="p"></div><div class="w"></div>`;
       li.querySelector(".t").textContent = hm(p.ts);
       li.querySelector(".i").textContent = i;
       li.querySelector(".v").textContent = deg(p.temp) + "°";
       li.querySelector(".p").textContent = p.precip_mm ? `${num(p.precip_mm, f1)} mm` : "";
+      li.querySelector(".w").textContent = p.wind == null ? "" : `${num(p.wind, f0)} m/s`;
       return li;
     }));
   }
 
+
+  // Dashboards: one slide each, swipeable (CSS scroll-snap), auto-advancing every 10 s.
+  // Any touch, wheel, key or dot click restarts the 10 s wait so a manual pick stays put for a while.
+  const dash = (function () {
+    const ROTATE_MS = 10000;
+    const box = $("slides"), dotsEl = $("dots");
+    let timer = null, held = false, idx = 0;
+    const slides = () => [...box.children].filter((el) => !el.hidden);
+    const current = () => Math.round(box.scrollLeft / (box.clientWidth || 1));
+
+    function go(i, smooth = true) {
+      const list = slides();
+      if (!list.length) return;
+      i = (i + list.length) % list.length;
+      box.scrollTo({ left: i * box.clientWidth, behavior: smooth ? "smooth" : "auto" });
+      mark(i);
+    }
+    function mark(i) {
+      idx = i;
+      [...dotsEl.children].forEach((d, k) => d.setAttribute("aria-selected", String(k === i)));
+    }
+    function restart() {
+      clearTimeout(timer);
+      if (held || document.hidden || slides().length < 2) return;
+      timer = setTimeout(() => { go(current() + 1); restart(); }, ROTATE_MS);
+    }
+    function refresh() {
+      const list = slides();
+      dotsEl.hidden = list.length < 2;
+      dotsEl.replaceChildren(...list.map((el, k) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "dot";
+        b.setAttribute("role", "tab");
+        b.setAttribute("aria-label", el.getAttribute("aria-label"));
+        b.onclick = () => { go(k); restart(); };
+        return b;
+      }));
+      go(Math.min(idx, list.length - 1), false);
+      restart();
+    }
+
+    let scrollEnd;
+    box.addEventListener("scroll", () => {
+      clearTimeout(scrollEnd);
+      scrollEnd = setTimeout(() => mark(current()), 80);
+    }, { passive: true });
+    box.addEventListener("pointerdown", () => { held = true; clearTimeout(timer); });
+    window.addEventListener("pointerup", () => { if (held) { held = false; restart(); } });
+    window.addEventListener("pointercancel", () => { if (held) { held = false; restart(); } });
+    box.addEventListener("wheel", restart, { passive: true });
+    document.addEventListener("keydown", (e) => {
+      if (e.target.closest("input, textarea, select") || !$("drawer").hidden) return;
+      if (e.key === "ArrowRight") { go(current() + 1); restart(); }
+      else if (e.key === "ArrowLeft") { go(current() - 1); restart(); }
+    });
+    document.addEventListener("visibilitychange", restart);
+    window.addEventListener("resize", () => go(idx, false));
+    return { refresh };
+  })();
+
   (async function boot() {
+    dash.refresh();
     await loadStatus();
     await loadLive();
     setInterval(loadLive, 5000);
