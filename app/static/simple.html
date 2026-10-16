@@ -65,19 +65,68 @@
         <p class="sim-note" id="simNote" hidden>Consumption is simulated until the HAN reader is connected. Prices are real.</p>
       </section>
 
-      <section class="slide" id="weather" aria-roledescription="dashboard" aria-label="Weather" hidden>
+      <section class="slide simple" id="weather" aria-roledescription="dashboard" aria-label="Weather" hidden>
         <div class="weather-card">
-          <div class="wx-now">
-            <span class="wx-icon" id="wxIcon" aria-hidden="true"></span>
-            <div>
-              <div class="label" id="wxPlace">Weather now</div>
-              <div class="wx-temp"><span id="wxTemp">–</span><small>°C</small></div>
-              <div class="sub" id="wxDesc">&nbsp;</div>
+          <div class="wx-top">
+            <div class="wx-now">
+              <span class="wx-icon" id="wxIcon" aria-hidden="true"></span>
+              <div>
+                <div class="label" id="wxPlace">Weather now</div>
+                <div class="wx-temp"><span id="wxTemp">–</span><small>°C</small></div>
+                <div class="sub" id="wxDesc">&nbsp;</div>
+              </div>
             </div>
+            <ol class="wx-days" id="wxDays" aria-label="Next 3 days"></ol>
           </div>
           <h2 class="wx-head">Next 24 hours</h2>
           <ol class="wx-next" id="wxNext"></ol>
-          <p class="wx-credit">Weather from <a href="https://www.yr.no/" target="_blank" rel="noopener">Yr</a>, data by MET Norway</p>
+          <div class="wx-warnings" id="wxWarnings" aria-label="Weather warnings"></div>
+          <p class="wx-credit">Weather from <a href="https://www.yr.no/" target="_blank" rel="noopener">Yr</a>, data by MET Norway ·
+            warnings by <a href="https://en.ilmatieteenlaitos.fi/warnings" target="_blank" rel="noopener">FMI</a></p>
+        </div>
+      </section>
+
+      <section class="slide" id="headsUp" aria-roledescription="dashboard" aria-label="Heads up">
+        <div class="hu-card">
+          <div class="hu-title">
+            <h2>Heads up</h2>
+            <span>Things to watch in the next few days</span>
+          </div>
+          <div class="hu-group" id="huWeather" hidden>
+            <h3>Weather</h3>
+            <ul class="hu-list" id="huWeatherList"></ul>
+          </div>
+          <div class="hu-group" id="huPower" hidden>
+            <h3 id="huPowerHead">Electricity tomorrow</h3>
+            <ul class="hu-list" id="huPowerList"></ul>
+          </div>
+          <div class="hu-calm" id="huCalm" hidden>
+            <svg class="hu-art" viewBox="0 0 320 170" aria-hidden="true">
+              <defs><clipPath id="huFrame"><rect width="320" height="170" rx="22"/></clipPath></defs>
+              <g clip-path="url(#huFrame)">
+              <rect class="sky" width="320" height="170"/>
+              <circle class="sun-glow" cx="236" cy="58" r="40"/>
+              <circle class="sun" cx="236" cy="58" r="24"/>
+              <g class="cloud"><ellipse cx="86" cy="50" rx="30" ry="12"/><ellipse cx="104" cy="42" rx="20" ry="14"/><ellipse cx="72" cy="45" rx="14" ry="10"/></g>
+              <g class="cloud small"><ellipse cx="172" cy="28" rx="18" ry="7"/><ellipse cx="182" cy="23" rx="11" ry="8"/></g>
+              <path class="bird" d="M140 64q5-5 10 0q5-5 10 0M168 78q4-4 8 0q4-4 8 0"/>
+              <path class="hill back" d="M0 128 Q70 92 150 112 T320 100 V170 H0Z"/>
+              <path class="hill front" d="M0 146 Q90 116 190 136 T320 132 V170 H0Z"/>
+              <g class="house" transform="translate(92 104)">
+                <rect class="wall" x="0" y="14" width="40" height="28" rx="2"/>
+                <path class="roof" d="M-5 16 L20 -2 L45 16Z"/>
+                <rect class="chimney" x="30" y="0" width="6" height="10"/>
+                <rect class="window" x="7" y="21" width="10" height="9" rx="1"/>
+                <rect class="door" x="24" y="24" width="9" height="18" rx="1"/>
+              </g>
+              <g class="tree" transform="translate(252 112)"><rect x="-2" y="10" width="4" height="14"/><circle cy="6" r="11"/></g>
+              <g class="tree" transform="translate(272 118) scale(.75)"><rect x="-2" y="10" width="4" height="14"/><circle cy="6" r="11"/></g>
+              </g>
+            </svg>
+            <strong>All calm</strong>
+            <p id="huCalmText">Nothing to watch out for.</p>
+          </div>
+          <p class="hu-foot" id="huFoot" hidden></p>
         </div>
       </section>
     </div>

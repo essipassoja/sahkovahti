@@ -110,11 +110,129 @@
   }
   const deg = (v) => (v == null ? "–" : f0.format(Math.round(v) || 0));
 
+  const weekday = (t, style = "short") =>
+    new Intl.DateTimeFormat("en-GB", { timeZone: tz, weekday: style }).format(new Date(t * 1000));
+  const dayMonth = (t) => new Intl.DateTimeFormat("fi-FI", { timeZone: tz, day: "numeric", month: "numeric" }).format(new Date(t * 1000));
+  // name a day relative to today: "today", "tomorrow" or "on Saturday"
+  const onDay = (t) => {
+    const d = isoDay(t), now = Date.now() / 1000;
+    if (d === isoDay(now)) return "today";
+    if (d === isoDay(now + 86400)) return "tomorrow";
+    return "on " + weekday(t + 43200, "long");
+  };
+  const el = (tag, cls, text) => {
+    const e = document.createElement(tag);
+    if (cls) e.className = cls;
+    if (text != null) e.textContent = text;
+    return e;
+  };
+
+  function renderDays(days) {
+    $("wxDays").replaceChildren(...days.map((d) => {
+      const li = el("li");
+      const [i, t] = wx(d.symbol);
+      li.title = t;
+      const head = el("div", "d", weekday(d.ts + 43200));
+      head.append(el("small", null, " " + dayMonth(d.ts + 43200)));
+      const temps = el("div", "v", deg(d.tmax) + "°");
+      temps.append(el("span", "lo", " / " + deg(d.tmin) + "°"));
+      li.append(head, el("div", "i", i), temps,
+        el("div", "p", d.precip_mm >= 0.1 ? `${num(d.precip_mm, f1)} mm` : ""),
+        el("div", "w", d.wind == null ? "" : `wind ${num(d.wind, f0)} m/s`));
+      return li;
+    }));
+  }
+
+  function renderWarnings(list) {
+    const now = Date.now() / 1000;
+    $("wxWarnings").replaceChildren(...list.map((w) => {
+      const box = el("article", "wx-warn");
+      box.dataset.color = w.color;
+      const head = el("div", "wh");
+      head.append(el("span", "wi", "⚠️"), el("strong", null, w.headline || w.event || "Weather warning"));
+      if (w.onset != null && w.onset <= now) head.append(el("span", "tag", "In effect"));
+      box.append(head);
+      if (w.impacts) box.append(el("p", null, w.impacts));
+      if (w.description) box.title = w.description;
+      return box;
+    }));
+  }
+
+  const ALERTS = {
+    wind: ["💨", "Strong wind", (e) => [
+      e.gust != null ? `gusts up to ${num(e.gust, f0)} m/s` : null,
+      e.wind != null ? `mean wind up to ${num(e.wind, f0)} m/s` : null, `strongest ${when(e.ts)}`]],
+    heat: ["🥵", "Hot weather", (e) => [`up to ${deg(e.temp)} °C`, when(e.ts)]],
+    cold: ["🥶", "Severe cold", (e) => [`down to ${deg(e.temp)} °C`, when(e.ts)]],
+    rain: ["🌧️", "Heavy rain", (e) => [`${num(e.total_mm, f0)} mm ${onDay(e.ts + 43200)}`,
+      e.max_mm_h != null ? `up to ${num(e.max_mm_h, f1)} mm/h at ${when(e.max_ts)}` : null]],
+    snow: ["❄️", "Heavy snowfall", (e) => [`roughly ${num(e.total_mm, f0)} cm of snow ${onDay(e.ts + 43200)}`]],
+  };
+
+  const item = (icon, title, detail) => {
+    const li = el("li"), text = el("div");
+    text.append(el("strong", null, title), el("span", null, detail.filter(Boolean).join(" · ")));
+    li.append(el("span", "ai", icon), text);
+    return li;
+  };
+
+  // Heads-up dashboard: dramatic weather and tomorrow's electricity, or a calm picture
+  const hu = { weather: false, extremes: [], tomorrow: undefined };
+
+  function powerItems(o) {
+    if (!o) return [];
+    const c = (v) => `${num(v, f1)} c`;
+    const prices = `average ${num(o.avg, f1)} c/kWh (${c(o.min)} – ${c(o.max)})`;
+    const out = [];
+    if (o.verdict === "expensive") out.push(item("💸", "Very expensive day", [prices, "do laundry and EV charging today if you can"]));
+    if (o.verdict === "cheap") out.push(item("💚", "Very cheap day", [prices, "save laundry, EV charging and sauna for tomorrow"]));
+    if (o.red.length) {
+      const shown = o.red.slice(0, 4).map((r) => `${hm(r.start)}–${hm(r.end)} up to ${c(r.max)}`);
+      if (o.red.length > 4) shown.push(`${o.red.length - 4} more`);
+      out.push(item("🔴", o.red.length > 1 ? "Expensive periods" : "Expensive period",
+        [`over ${num(o.red_above, f0)} c/kWh: ` + shown.join(", ")]));
+    }
+    return out;
+  }
+
+  function renderHeadsUp() {
+    const wxList = hu.extremes.filter((e) => ALERTS[e.kind]).map((e) => {
+      const [icon, title, detail] = ALERTS[e.kind];
+      return item(icon, title, detail(e));
+    });
+    $("huWeatherList").replaceChildren(...wxList);
+    $("huWeather").hidden = !wxList.length;
+
+    const pList = powerItems(hu.tomorrow);
+    $("huPowerList").replaceChildren(...pList);
+    $("huPower").hidden = !pList.length;
+    if (hu.tomorrow) $("huPowerHead").textContent = `Electricity tomorrow, ${weekday(Date.now() / 1000 + 86400, "long")}`;
+
+    const calm = !wxList.length && !pList.length;
+    $("huCalm").hidden = !calm;
+    const known = hu.tomorrow ? "nothing unusual in tomorrow's electricity prices" : null;
+    $("huCalmText").textContent = (hu.weather
+      ? ["No dramatic weather in the next 3 days", known]
+      : [known || "Nothing to watch out for right now"]).filter(Boolean).join(", and ") + ".";
+    $("huFoot").hidden = hu.tomorrow !== null;
+    $("huFoot").textContent = "Tomorrow's electricity prices come out around 14.00.";
+    $("headsUp").dataset.alert = calm ? "" : "1";
+    dash.badges();
+  }
+
+  async function loadOutlook() {
+    try { hu.tomorrow = (await get("/api/outlook")).tomorrow; } catch { return; }
+    renderHeadsUp();
+  }
+
   async function loadWeather() {
     let w;
     try { w = await get("/api/weather"); } catch { return; }
     const show = !!(w.enabled && w.now);
     if ($("weather").hidden === show) { $("weather").hidden = !show; dash.refresh(); }
+    hu.weather = show;
+    hu.extremes = (show && w.extremes) || [];
+    renderHeadsUp();
     if (!show) return;
     const [icon, text] = wx(w.now.symbol);
     $("wxIcon").textContent = icon;
@@ -134,6 +252,8 @@
       li.querySelector(".w").textContent = p.wind == null ? "" : `${num(p.wind, f0)} m/s`;
       return li;
     }));
+    renderDays(w.days || []);
+    renderWarnings(w.warnings || []);
   }
 
 
@@ -160,7 +280,7 @@
     function restart() {
       clearTimeout(timer);
       if (held || document.hidden || slides().length < 2) return;
-      timer = setTimeout(() => { go(current() + 1); restart(); }, ROTATE_MS);
+      timer = setTimeout(() => { go(idx + 1); restart(); }, ROTATE_MS);
     }
     function refresh() {
       const list = slides();
@@ -175,7 +295,11 @@
         return b;
       }));
       go(Math.min(idx, list.length - 1), false);
+      badges();
       restart();
+    }
+    function badges() {
+      slides().forEach((el, k) => dotsEl.children[k]?.classList.toggle("alert", !!el.dataset.alert));
     }
 
     let scrollEnd;
@@ -189,12 +313,12 @@
     box.addEventListener("wheel", restart, { passive: true });
     document.addEventListener("keydown", (e) => {
       if (e.target.closest("input, textarea, select") || !$("drawer").hidden) return;
-      if (e.key === "ArrowRight") { go(current() + 1); restart(); }
-      else if (e.key === "ArrowLeft") { go(current() - 1); restart(); }
+      if (e.key === "ArrowRight") { go(idx + 1); restart(); }
+      else if (e.key === "ArrowLeft") { go(idx - 1); restart(); }
     });
     document.addEventListener("visibilitychange", restart);
     window.addEventListener("resize", () => go(idx, false));
-    return { refresh };
+    return { refresh, badges };
   })();
 
   (async function boot() {
@@ -205,5 +329,7 @@
     setInterval(loadStatus, 120000);
     loadWeather();
     setInterval(loadWeather, 15 * 60000);
+    loadOutlook();
+    setInterval(loadOutlook, 5 * 60000);
   })();
 })();

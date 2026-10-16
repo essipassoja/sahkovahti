@@ -180,6 +180,26 @@ def day_light_prices(d: date, cfg: Config, db: DB) -> dict | None:
             "min": round(min(prices), 3), "max": round(max(prices), 3)}
 
 
+def day_outlook(d: date, cfg: Config, db: DB) -> dict | None:
+    """A whole day's prices summed up for the heads-up dashboard: whether the day is very cheap or
+    very expensive (the tomorrow notification's limits) and its red periods. None until published."""
+    day = day_light_prices(d, cfg, db)
+    if day is None:
+        return None
+    n = cfg.notify
+    verdict = ("cheap" if day["avg"] < n.tomorrow_cheap_below
+               else "expensive" if day["avg"] > n.tomorrow_expensive_above else None)
+    red: list[dict] = []
+    for q, p in _light_series(*day_bounds(d, cfg), cfg, db):
+        if cfg.light.level(p) != "red":
+            continue
+        if red and q - red[-1]["end"] <= 2 * QUARTER:     # a dip of up to 30 min doesn't split a period
+            red[-1]["end"], red[-1]["max"] = q + QUARTER, max(red[-1]["max"], round(p, 3))
+        else:
+            red.append({"start": q, "end": q + QUARTER, "max": round(p, 3)})
+    return {**day, "verdict": verdict, "red": red, "red_above": cfg.light.red_above}
+
+
 def traffic_light(cfg: Config, db: DB, now: int | None = None) -> dict:
     """Current green/yellow/red level and when it next changes (known prices only)."""
     now = int(time.time()) if now is None else now

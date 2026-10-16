@@ -17,7 +17,7 @@ from app.db import DB  # noqa: E402
 from app.meter.base import Reading  # noqa: E402
 from app.meter.p1 import TelegramAssembler, check_crc, crc16, parse_telegram  # noqa: E402
 from app.prices import parse_porssisahko  # noqa: E402
-from app.weather import summarize  # noqa: E402
+from app.weather import parse_warnings, summarize  # noqa: E402
 
 BODY = (
     "/ADN9 6534\r\n"
@@ -516,6 +516,18 @@ class NotifierTests(unittest.TestCase):
         self.assertIsNone(nt.check_tomorrow(now))
         self.assertEqual(self.sent, [])
 
+    def test_day_outlook(self):
+        from app.analysis import day_outlook
+        nt, _ = self._tomorrow([10] * 68 + [30, 40, 30, 30] + [10] * 4 + [25] * 4 + [32] * 20)   # average 15.9
+        o = day_outlook(date(1970, 1, 2), nt.cfg, self.db)
+        self.assertIsNone(o["verdict"])
+        t0 = int(datetime(1970, 1, 2, tzinfo=HEL).timestamp())
+        self.assertEqual([(r["start"] - t0, r["end"] - t0, r["max"]) for r in o["red"]],
+                         [(17 * 3600, 18 * 3600, 40), (19 * 3600, 24 * 3600, 32)])
+        nt, _ = self._tomorrow([40] * 96)
+        self.assertEqual(day_outlook(date(1970, 1, 2), nt.cfg, self.db)["verdict"], "expensive")
+        self.assertIsNone(day_outlook(date(1970, 1, 3), nt.cfg, self.db))     # not published
+
     def test_tomorrow_off(self):
         nt, now = self._tomorrow([1] * 96, on_tomorrow=False)
         self.assertIsNone(nt.check_tomorrow(now))
@@ -551,7 +563,55 @@ class WeatherTest(unittest.TestCase):
                 WeatherSettings(**bad)
 
     def test_summarize_empty(self):
-        self.assertEqual(summarize({}, 0), {"now": None, "next": [], "updated_at": None})
+        self.assertEqual(summarize({}, 0), {"now": None, "next": [], "days": [], "extremes": [],
+                                            "updated_at": None})
+
+    def test_days_and_extremes(self):
+        # hourly for 48 h, then 6-hourly, like MET; Helsinki is UTC+3 in October
+        def entry(t, temp, wind, gust, precip, sym="rain"):
+            nxt = {"summary": {"symbol_code": sym}, "details": {"precipitation_amount": precip}}
+            return {"time": datetime.fromtimestamp(t, ZoneInfo("UTC")).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "data": {"instant": {"details": {"air_temperature": temp, "wind_speed": wind,
+                                                     "wind_speed_of_gust": gust}},
+                             "next_1_hours": nxt, "next_6_hours": nxt}}
+        t0 = int(datetime(2026, 10, 13, 21, 0, tzinfo=ZoneInfo("UTC")).timestamp())   # 00.00 local
+        series = [entry(t0 + h * 3600, 5.0, 4.0, 8.0, 0.2) for h in range(48)]
+        series += [entry(t0 + 48 * 3600 + k * 6 * 3600, -1.0, 9.0, 23.0, 3.0, "snow") for k in range(8)]
+        w = summarize({"properties": {"timeseries": series}}, t0 + 600)
+        self.assertEqual([d["date"] for d in w["days"]], ["2026-10-15", "2026-10-16", "2026-10-17"])
+        self.assertEqual(w["days"][0]["precip_mm"], 4.8)        # 24 × 0.2 mm, nothing counted twice
+        self.assertEqual(w["days"][1]["snow_mm"], 12.0)         # 4 × 3 mm in 6-hour blocks
+        self.assertEqual(w["days"][1]["gust"], 23.0)
+        kinds = {e["kind"]: e for e in w["extremes"]}
+        self.assertEqual(set(kinds), {"wind", "snow"})
+        self.assertEqual(kinds["wind"]["gust"], 23.0)
+        self.assertEqual(kinds["snow"]["total_mm"], 12.0)
+
+    def test_warnings_for_location(self):
+        def alert(ident, poly, msg="Alert", refs="", expires="2026-10-20T00:00:00+03:00", color="yellow"):
+            return f"""<entry><content><alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+              <identifier>{ident}</identifier><status>Actual</status><msgType>{msg}</msgType>
+              <references>{refs}</references>
+              <info><language>fi-FI</language><headline>Suomeksi</headline></info>
+              <info><language>en-GB</language><event>Wind warning</event><headline>{ident} warning</headline>
+                <onset>2026-10-19T13:00:00+03:00</onset><expires>{expires}</expires>
+                <parameter><valueName>color</valueName><value>{color}</value></parameter>
+                <area><areaDesc>Somewhere</areaDesc><polygon>{poly}</polygon></area></info>
+            </alert></content></entry>"""
+        here = "60,24 61,24 61,26 60,26 60,24"       # box around Helsinki
+        away = "65,24 66,24 66,26 65,26 65,24"
+        xml = f"""<feed xmlns="http://www.w3.org/2005/Atom">
+          {alert("old", here)}
+          {alert("new", here, "Update", "urn:sender,old,2026-10-16T05:00:00+03:00", color="orange")}
+          {alert("far", away)}
+          {alert("past", here, expires="2026-10-01T00:00:00+03:00")}
+          {alert("gone", here, "Cancel")}
+          {alert("also", here)}
+        </feed>""".encode()
+        now = datetime(2026, 10, 16, 12, 0, tzinfo=ZoneInfo("UTC")).timestamp()
+        ws = parse_warnings(xml, 60.1699, 24.9384, now)
+        self.assertEqual([w["headline"] for w in ws], ["new warning", "also warning"])   # orange first
+        self.assertEqual(ws[0]["color"], "orange")
 
 if __name__ == "__main__":
     unittest.main()

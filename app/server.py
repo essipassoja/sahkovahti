@@ -6,7 +6,7 @@ import logging
 import mimetypes
 import secrets
 import time
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -131,6 +131,10 @@ class App:
     def weather(self, _q):
         return self.weather_src.get()
 
+    def outlook(self, _q):
+        tomorrow = datetime.now(self.cfg.tz).date() + timedelta(days=1)
+        return {"tomorrow": analysis.day_outlook(tomorrow, self.cfg, self.db)}
+
     def geocode(self, q):
         text = (q.get("q", [""])[0] or "").strip()
         if len(text) < 2:
@@ -217,7 +221,7 @@ class App:
     ROUTES = {
         "/api/live": "live", "/api/day": "day", "/api/history": "history",
         "/api/power": "power", "/api/cheapest": "cheapest", "/api/status": "status",
-        "/api/settings": "settings", "/api/weather": "weather",
+        "/api/settings": "settings", "/api/weather": "weather", "/api/outlook": "outlook",
         "/api/geocode": "geocode",
     }
     POST_ROUTES = {
