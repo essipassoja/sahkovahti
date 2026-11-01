@@ -1,0 +1,34 @@
+/* Heads-up page: dramatic weather and tomorrow's electricity, or a calm picture. */
+/* heads-up dashboard: warnings, dramatic weather, tomorrow's electricity */
+.hu-group h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+.hu-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.hu-list li { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--text) 4%, transparent); }
+.hu-list .ai { font-size: 32px; line-height: 1; flex: none; }
+.hu-list strong { display: block; font-size: 18px; }
+.hu-list li span:not(.ai) { font-size: 15px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.hu-foot { margin: 0; font-size: 13px; color: var(--muted); }
+
+.hu-calm { display: grid; justify-items: center; text-align: center; gap: 6px; padding: 4px 0 8px; }
+.hu-calm strong { font-size: 26px; letter-spacing: -0.02em; }
+.hu-calm p { margin: 0; color: var(--text-2); font-size: 16px; max-width: 34em; }
+.hu-art { width: min(100%, 440px); height: auto; margin-bottom: 6px; }
+.hu-art .sky { fill: var(--art-sky); }
+.hu-art .sun { fill: var(--lamp-yellow); }
+.hu-art .sun-glow { fill: var(--lamp-yellow); opacity: .18; }
+.hu-art .cloud { fill: var(--art-cloud); }
+.hu-art .cloud.small { opacity: .8; }
+.hu-art .bird { fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; }
+.hu-art .hill.back { fill: var(--art-hill-back); }
+.hu-art .hill.front { fill: var(--art-hill-front); }
+.hu-art .wall { fill: var(--art-wall); }
+.hu-art .roof { fill: var(--lamp-red); }
+.hu-art .chimney { fill: color-mix(in srgb, var(--lamp-red) 70%, #000); }
+.hu-art .window { fill: var(--lamp-yellow); }
+.hu-art .door { fill: color-mix(in srgb, var(--art-wall) 55%, #5a3d28); }
+.hu-art .tree circle { fill: var(--art-tree); }
+.hu-art .tree rect { fill: #7a5a3c; }
+:root { --art-sky: #dcebf5; --art-cloud: #ffffff; --art-hill-back: #b9dcb2; --art-hill-front: #8cc68a; --art-wall: #f3ead9; --art-tree: #4f9b57; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --art-sky: #1d2833; --art-cloud: #4a5866; --art-hill-back: #23412a; --art-hill-front: #2e5a36; --art-wall: #d9cfbd; --art-tree: #3f7d46; }
+}
+:root[data-theme="dark"] { --art-sky: #1d2833; --art-cloud: #4a5866; --art-hill-back: #23412a; --art-hill-front: #2e5a36; --art-wall: #d9cfbd; --art-tree: #3f7d46; }

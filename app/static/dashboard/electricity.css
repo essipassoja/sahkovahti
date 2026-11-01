@@ -1,0 +1,19 @@
+/* Electricity page: today's prices, spot price, price now, power now. */
+/* spot price tile tinted with the traffic light; the level is also written out, never colour alone */
+.spot-tile { --lv: var(--lamp-off); background: color-mix(in srgb, var(--lv) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--lv) 55%, var(--border)); box-shadow: inset 6px 0 0 var(--lv); }
+.spot-tile[data-level="green"] { --lv: var(--lamp-green); }
+.spot-tile[data-level="yellow"] { --lv: var(--lamp-yellow); }
+.spot-tile[data-level="red"] { --lv: var(--lamp-red); }
+.spot-tile .level { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 16px; font-weight: 650; }
+.spot-tile .pip { width: 14px; height: 14px; border-radius: 50%; background: var(--lv); box-shadow: 0 0 10px var(--lv); flex: none; }
+.spot-tile .next { margin-top: 2px; color: var(--text); }
+.elec-chart { gap: 10px; padding: 18px 22px 16px; }
+.elec-chart .card-title h2 { font-size: 20px; }
+/* today's prices on the electricity dashboard, coloured by the traffic light */
+.pc-chart .lvl-green { fill: var(--lamp-green); }
+.pc-chart .lvl-yellow { fill: var(--lamp-yellow); }
+.pc-chart .lvl-red { fill: var(--lamp-red); }
+.pc-chart .past { opacity: .35; }
+.pc-chart .reflabel, .pc-chart .nowlabel { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.sim-note { margin: 0; text-align: center; font-size: 13px; color: var(--muted); }

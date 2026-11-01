@@ -7,14 +7,24 @@
   const f0 = nf(0), f1 = nf(1), f2 = nf(2), f3 = nf(3);
   const num = (v, f = f2, dash = "–") => (v == null || Number.isNaN(v) ? dash : f.format(v));
   const slotName = (sec) => (sec === 3600 ? "hour" : "15 min");
-  const tf = () => new Intl.DateTimeFormat("fi-FI", { timeZone: state.tz, hour: "2-digit", minute: "2-digit" });
-  const hm = (t) => tf().format(new Date(t * 1000));
-  const dayName = (t) => new Intl.DateTimeFormat("en-GB", { timeZone: state.tz, weekday: "short", day: "numeric", month: "short" }).format(new Date(t * 1000));
+  // formatters are costly to create and charts format hundreds of times: made once per time zone
+  let fmt = null;
+  const F = () => {
+    if (fmt?.tz !== state.tz) {
+      const f = (locale, o) => new Intl.DateTimeFormat(locale, { timeZone: state.tz, ...o });
+      fmt = { tz: state.tz, hm: f("fi-FI", { hour: "2-digit", minute: "2-digit" }),
+              day: f("en-GB", { weekday: "short", day: "numeric", month: "short" }),
+              parts: f("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" }), iso: f("en-CA", {}) };
+    }
+    return fmt;
+  };
+  const hm = (t) => F().hm.format(t * 1000);
+  const dayName = (t) => F().day.format(t * 1000);
   const localParts = (t) => {
-    const p = new Intl.DateTimeFormat("en-GB", { timeZone: state.tz, hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(t * 1000));
+    const p = F().parts.formatToParts(t * 1000);
     return { h: +p.find((x) => x.type === "hour").value, m: +p.find((x) => x.type === "minute").value };
   };
-  const todayIso = () => new Intl.DateTimeFormat("en-CA", { timeZone: state.tz }).format(new Date());
+  const todayIso = () => F().iso.format(Date.now());
   const shiftIso = (iso, n) => { const d = new Date(iso + "T12:00:00Z"); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
   const row = (k, v) => `<div class="r"><span>${k}</span><b>${v}</b></div>`;
 
@@ -154,7 +164,7 @@
     try { d = await get("/api/cheapest"); } catch { return; }
     const today = todayIso();
     $("windows").innerHTML = d.windows.length ? d.windows.map((w) => {
-      const sameDay = new Intl.DateTimeFormat("en-CA", { timeZone: state.tz }).format(new Date(w.start * 1000)) === today;
+      const sameDay = F().iso.format(w.start * 1000) === today;
       return `<li><span class="dur">${w.hours} h</span>
         <span class="when">${hm(w.start)}–${hm(w.end)}<small>${sameDay ? "today" : dayName(w.start)}</small></span>
         <span class="p">${num(w.avg_total, f2)} c<small>spot ${num(w.avg_spot, f2)}</small></span></li>`;

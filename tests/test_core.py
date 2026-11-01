@@ -763,5 +763,85 @@ class CalendarTests(unittest.TestCase):
                 CalendarSettings(**bad)
 
 
+
+class WarningsCacheTests(unittest.TestCase):
+    def test_parsed_once_per_download_and_expired_dropped(self):
+        import time
+        from unittest import mock
+        import app.weather as weather
+        w = weather.Warnings()
+        w._xml, w._next, w._feed = b"<feed/>", float("inf"), 1      # as if just downloaded
+        found = [{"expires": time.time() + 3600}, {"expires": time.time() + 1}]
+        with mock.patch.object(weather, "parse_warnings", return_value=found) as parse:
+            self.assertEqual(len(w.get(60.0, 24.0)), 2)
+            self.assertEqual(len(w.get(60.0, 24.0)), 2)
+            self.assertEqual(parse.call_count, 1)                    # second call from the cache
+            w.get(61.0, 24.0)                                        # another place: parsed again
+            self.assertEqual(parse.call_count, 2)
+            w._feed += 1                                             # a new download
+            w.get(61.0, 24.0)
+            self.assertEqual(parse.call_count, 3)
+            with mock.patch.object(weather.time, "time", return_value=time.time() + 60):
+                self.assertEqual(len(w.get(61.0, 24.0)), 1)          # one ran out meanwhile
+
+
+class StaticFileTests(unittest.TestCase):
+    """The pages, and every file they load, are served; unchanged files answer 304."""
+
+    @classmethod
+    def setUpClass(cls):
+        import threading
+        from http.server import ThreadingHTTPServer
+        from app.server import make_handler
+        stub = type("Stub", (), {"ROUTES": {}, "POST_ROUTES": {}})()
+        cls.httpd = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(stub))
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+        cls.base = f"http://127.0.0.1:{cls.httpd.server_port}"
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+
+    def fetch(self, path, headers=None):
+        import urllib.error
+        import urllib.request
+        try:
+            with urllib.request.urlopen(urllib.request.Request(self.base + path, headers=headers or {})) as r:
+                return r.status, r.headers, r.read().decode(errors="replace")
+        except urllib.error.HTTPError as e:
+            return e.code, e.headers, ""
+
+    def test_pages_and_everything_they_load(self):
+        import re
+        seen = set()
+        todo = ["/", "/details", "/settings", "/sw.js", "/manifest.webmanifest"]
+        while todo:
+            path = todo.pop()
+            if path in seen:
+                continue
+            seen.add(path)
+            code, _, text = self.fetch(path)
+            self.assertEqual(code, 200, path)
+            # <link href> / <script src> in pages, and imports between the dashboard's modules
+            refs = re.findall(r'(?:href|src)="(/static/[^"]+)"', text)
+            refs += [str(Path(path).parent / m).replace("\\", "/")
+                     for m in re.findall(r'from "\./([\w.]+)"', text)]
+            todo += refs
+        self.assertIn("/static/dashboard/electricity.js", seen)
+        self.assertGreater(len(seen), 20)
+
+    def test_unchanged_file_answers_304(self):
+        code, headers, _ = self.fetch("/static/base.css")
+        self.assertEqual(code, 200)
+        modified = headers["Last-Modified"]
+        self.assertEqual(self.fetch("/static/base.css", {"If-Modified-Since": modified})[0], 304)
+        self.assertEqual(self.fetch("/static/base.css", {"If-Modified-Since": "Thu, 01 Jan 1970 00:00:00 GMT"})[0], 200)
+        self.assertEqual(self.fetch("/static/base.css", {"If-Modified-Since": "rubbish"})[0], 200)
+
+    def test_outside_static_is_not_served(self):
+        self.assertEqual(self.fetch("/static/../server.py")[0], 404)
+
+
 if __name__ == "__main__":
     unittest.main()

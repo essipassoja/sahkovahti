@@ -7,6 +7,7 @@ import mimetypes
 import secrets
 import time
 from datetime import date, datetime, timedelta
+from email.utils import formatdate, parsedate_to_datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -22,8 +23,8 @@ from .weather import Weather, geocode
 
 STATIC = Path(__file__).parent / "static"
 # the service worker and manifest are served from the root so they control the whole app
-PAGES = {"/": "simple.html", "": "simple.html", "/details": "index.html", "/settings": "settings.html",
-         "/sw.js": "sw.js", "/manifest.webmanifest": "manifest.webmanifest"}
+PAGES = {"/": "dashboard/index.html", "": "dashboard/index.html", "/details": "details/index.html",
+         "/settings": "settings/index.html", "/sw.js": "sw.js", "/manifest.webmanifest": "manifest.webmanifest"}
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 SETTINGS_KEY = "settings"
 log = logging.getLogger("http")
@@ -228,11 +229,14 @@ class App:
         return self.settings(None)
 
     ROUTES = {
-        "/api/live": "live", "/api/day": "day", "/api/history": "history",
-        "/api/power": "power", "/api/cheapest": "cheapest", "/api/status": "status",
-        "/api/settings": "settings", "/api/weather": "weather", "/api/outlook": "outlook",
-        "/api/calendar": "calendar", "/api/prices": "price_days",
-        "/api/geocode": "geocode",
+        # dashboard: Electricity page (power also feeds the details page)
+        "/api/live": "live", "/api/prices": "price_days", "/api/power": "power",
+        # dashboard: Weather, Calendar and Heads-up pages
+        "/api/weather": "weather", "/api/calendar": "calendar", "/api/outlook": "outlook",
+        # details page
+        "/api/day": "day", "/api/history": "history", "/api/cheapest": "cheapest",
+        # every page's header; settings page
+        "/api/status": "status", "/api/settings": "settings", "/api/geocode": "geocode",
     }
     POST_ROUTES = {
         "/api/prices/refresh": "refresh_prices", "/api/settings": "save_settings",
@@ -248,11 +252,13 @@ def make_handler(app: App):
         def log_message(self, fmt, *args):
             log.debug("%s - %s", self.address_string(), fmt % args)
 
-        def _send(self, code, body: bytes, ctype: str, cache: str = "no-store"):
+        def _send(self, code, body: bytes, ctype: str, cache: str = "no-store", modified: str | None = None):
             self.send_response(code)
             self.send_header("Content-Type", ctype)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", cache)
+            if modified:
+                self.send_header("Last-Modified", modified)
             self.end_headers()
             self.wfile.write(body)
 
@@ -293,10 +299,22 @@ def make_handler(app: App):
             f = (STATIC / rel).resolve()
             if STATIC.resolve() not in f.parents or not f.is_file():
                 return self._send(404, b"not found", "text/plain")
+            # "no-cache" makes the browser ask every time; Last-Modified lets us answer "unchanged"
+            # without sending the file again
+            mtime = int(f.stat().st_mtime)
+            since = self.headers.get("If-Modified-Since")
+            try:
+                if since and int(parsedate_to_datetime(since).timestamp()) >= mtime:
+                    self.send_response(304)
+                    self.send_header("Cache-Control", "no-cache")
+                    self.end_headers()
+                    return
+            except (TypeError, ValueError):
+                pass
             ctype = mimetypes.guess_type(f.name)[0] or "application/octet-stream"
             if ctype.startswith("text/") or ctype.endswith("javascript"):
                 ctype += "; charset=utf-8"
-            self._send(200, f.read_bytes(), ctype, "no-cache")
+            self._send(200, f.read_bytes(), ctype, "no-cache", formatdate(mtime, usegmt=True))
 
         def do_POST(self):
             # JSON-only: browsers can't send that cross-site without a CORS preflight (which we

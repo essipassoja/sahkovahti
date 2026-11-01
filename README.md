@@ -190,6 +190,17 @@ app/
   sniff.py         hardware check tool
   meter/p1.py      HAN/P1 telegram parser with CRC check
   meter/sources.py simulator, serial, TCP, MQTT sources
-  static/          dashboard (HTML/CSS/JS, no external libraries — works offline)
+  weather.py       MET Norway forecast, FMI warnings
+  ical.py          calendars from iCal addresses
+  notify.py        phone notifications
+  static/          the web pages (HTML/CSS/JS, no external libraries or build step — works offline)
+    base.css, charts.js, nav.js     shared by every page
+    dashboard/     the front page: a carousel of pages, one module + stylesheet each
+      main.js      starts the pages and keeps them fresh
+      core.js      helpers: fetching, polling, number and date formatting
+      carousel.js, popup.js         swiping between pages, detail popups
+      electricity.*, weather.*, calendar.*, headsup.*
+    details/       day charts, power history, cheapest windows, monthly totals
+    settings/      tariff, traffic light, notifications, weather and calendar settings
 tests/             python3 -m unittest discover -s tests
 ```

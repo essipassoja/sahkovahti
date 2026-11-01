@@ -246,13 +246,16 @@ def parse_warnings(xml: bytes, lat: float, lon: float, now: float) -> list[dict]
 
 
 class Warnings:
-    """FMI warnings feed (~1 MB, all of Finland), re-read every 15 minutes."""
+    """FMI warnings feed (~1 MB, all of Finland), re-read every 15 minutes. Parsed once per
+    download and location; warnings that run out in between are dropped on the way out."""
     TTL = 900
 
     def __init__(self):
         self._lock = threading.Lock()
         self._xml: bytes | None = None
         self._next = 0.0
+        self._feed = 0                          # counts downloads, so a new feed is parsed again
+        self._parsed: tuple | None = None       # ((feed, lat, lon), warnings)
         self.last_error: str | None = None
 
     def get(self, lat: float, lon: float) -> list[dict]:
@@ -262,18 +265,24 @@ class Warnings:
                     req = urllib.request.Request(WARNINGS_URL, headers={"User-Agent": USER_AGENT})
                     with urllib.request.urlopen(req, timeout=20) as resp:
                         self._xml = resp.read()
+                    self._feed += 1
                     self._next, self.last_error = time.time() + self.TTL, None
                 except Exception as e:
                     log.warning("warnings fetch failed: %s", e)
                     self._next, self.last_error = time.time() + 300, str(e)   # keep the old feed meanwhile
             xml = self._xml
-        if not xml:
-            return []
-        try:
-            return parse_warnings(xml, lat, lon, time.time())
-        except ET.ParseError as e:
-            log.warning("warnings feed unreadable: %s", e)
-            return []
+            if not xml:
+                return []
+            key = (self._feed, lat, lon)
+            if not self._parsed or self._parsed[0] != key:
+                try:
+                    self._parsed = (key, parse_warnings(xml, lat, lon, time.time()))
+                except ET.ParseError as e:
+                    log.warning("warnings feed unreadable: %s", e)
+                    self._parsed = (key, [])
+            found = self._parsed[1]
+        now = time.time()
+        return [w for w in found if w["expires"] > now]
 
 
 class Weather:

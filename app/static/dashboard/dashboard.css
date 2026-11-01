@@ -1,0 +1,72 @@
+/* The dashboard carousel and what its pages share: cards, big tiles, detail popups. */
+.dash-page .wrap { max-width: 980px; }
+.stack { display: grid; gap: 16px; }
+/* the card each page is built from */
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 24px; display: grid; gap: 18px; }
+.card-title { display: flex; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
+.card-title h2 { font-size: 24px; letter-spacing: -0.02em; }
+.card-title span { font-size: 14px; color: var(--text-2); }
+
+/* dashboards: one per slide, swipe or wait */
+.slides { display: flex; align-items: flex-start; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory;
+  scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.slides::-webkit-scrollbar { display: none; }
+.slide { flex: 0 0 100%; min-width: 0; scroll-snap-align: start; scroll-snap-stop: always; }
+.dots { display: flex; justify-content: center; gap: 4px; margin: -10px 0 4px; }
+.dot { width: 28px; height: 28px; padding: 0; border: 0; background: none; cursor: pointer; display: grid; place-items: center; }
+.dot::before { content: ""; width: 9px; height: 9px; border-radius: 999px; background: var(--border); }
+.dot[aria-selected="true"]::before { width: 22px; background: var(--text-2); }
+.dot.alert::before { background: var(--lamp-yellow); }
+
+.big-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.big-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 20px 22px; }
+.big-tile .label { font-size: 16px; color: var(--text-2); }
+.big-tile .value { font-size: 56px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.big-tile .value small { font-size: 20px; font-weight: 500; color: var(--text-2); margin-left: 6px; letter-spacing: 0; }
+.big-tile .sub { font-size: 14px; color: var(--text-2); margin-top: 6px; font-variant-numeric: tabular-nums; }
+
+/* tiles that open a detail popup */
+.opens { cursor: pointer; }
+.opens .label::after, .opens h2::after { content: "›"; margin-left: 7px; color: var(--muted); font-weight: 400; }
+.opens:hover { border-color: color-mix(in srgb, var(--text-2) 50%, var(--border)); }
+.opens:focus-visible { outline: 2px solid var(--use); outline-offset: 2px; }
+.pop { width: min(900px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; overflow: auto;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.pop::backdrop { background: rgba(0,0,0,.45); }
+body:has(.pop[open]) { overflow: hidden; }
+.pop-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 18px 22px 12px; background: var(--surface); }
+.pop-body { display: grid; gap: 22px; padding: 4px 22px 22px; }
+.pop-day + .pop-day { border-top: 1px solid var(--border); padding-top: 20px; }
+.pop-day h3 { margin: 0 0 12px; font-size: 18px; }
+.pop-day h3 small { font-size: 14px; font-weight: 500; color: var(--text-2); }
+.pop-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.pop-stats > div { padding: 10px 14px; border-radius: 14px; background: color-mix(in srgb, var(--text) 4%, transparent); font-variant-numeric: tabular-nums; }
+.pop-stats span { display: block; font-size: 13px; color: var(--text-2); }
+.pop-stats b { display: block; font-size: 24px; font-weight: 650; letter-spacing: -0.02em; }
+.pop-stats small { display: block; font-size: 12.5px; color: var(--text-2); }
+.pop-levels { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 12px 0 6px; padding: 0; font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pop-levels .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.pop-note { margin: 0; font-size: 14px; color: var(--text-2); }
+.pop-day .pop-note + .chart, .pop-day .chart + .pop-note { margin-top: 8px; }
+.pop-tabs { justify-self: start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.pop-tabs button { padding: 7px 14px; font-size: 14px; white-space: nowrap; }
+
+@media (max-width: 860px) {
+  .big-tiles { grid-template-columns: 1fr 1fr; }
+  .big-tile:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 600px) {
+  .big-tiles { grid-template-columns: 1fr; gap: 12px; }
+  .big-tile:last-child { grid-column: auto; }
+  .big-tile .value { font-size: 44px; }
+}
+@media (max-width: 600px) {
+  .pop { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .pop-head { padding: 14px 16px 10px; }
+  .pop-body { padding: 4px 16px 16px; }
+  .pop-stats { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pop-stats.three { grid-template-columns: repeat(3, 1fr); }
+  .pop-stats > div { padding: 8px 10px; }
+  .pop-stats b { font-size: 20px; }
+}
