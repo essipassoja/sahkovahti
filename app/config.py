@@ -297,6 +297,14 @@ class WeatherSettings:
     place: str = "Helsinki"        # shown on the front page
     latitude: float = 60.1699
     longitude: float = 24.9384
+    # "dramatic weather" limits for the Heads up dashboard
+    gust_strong_ms: float = 20.0       # m/s gusts, at or above; FMI's land wind warnings start around here
+    wind_strong_ms: float = 15.0       # m/s mean wind, at or above
+    hot_above_c: float = 25.0          # °C
+    cold_below_c: float = -25.0        # °C
+    rain_heavy_day_mm: float = 15.0    # mm in a day, at or above
+    rain_heavy_hour_mm: float = 5.0    # mm in an hour, at or above
+    snow_heavy_day_mm: float = 8.0     # mm water in a day, roughly 8–15 cm of fresh snow
 
     def __post_init__(self):
         if not isinstance(self.enabled, bool):
@@ -305,6 +313,14 @@ class WeatherSettings:
         # MET asks for at most 4 decimals (~10 m), more only defeats their cache
         self.latitude = round(_num("latitude", self.latitude, -90, 90), 4)
         self.longitude = round(_num("longitude", self.longitude, -180, 180), 4)
+        for f in ("gust_strong_ms", "wind_strong_ms"):
+            setattr(self, f, _num(f, getattr(self, f), 0, 100))
+        self.hot_above_c = _num("hot_above_c", self.hot_above_c, -60, 60)
+        self.cold_below_c = _num("cold_below_c", self.cold_below_c, -60, 60)
+        if self.cold_below_c >= self.hot_above_c:
+            raise ValueError("cold_below_c must be lower than hot_above_c")
+        for f in ("rain_heavy_day_mm", "rain_heavy_hour_mm", "snow_heavy_day_mm"):
+            setattr(self, f, _num(f, getattr(self, f), 0.1, 1000))
 
     @classmethod
     def keys(cls) -> list[str]:

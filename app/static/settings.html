@@ -190,6 +190,24 @@
         <label class="field">Longitude <span class="unit">° east</span>
           <input name="weather.longitude" type="number" step="0.0001" min="-180" max="180" inputmode="decimal" required>
           <small>e.g. 24.9384</small></label>
+        <details class="wide advanced"><summary>Dramatic weather limits <span class="muted">Heads up dashboard</span></summary>
+          <label class="field">Strong wind: gusts from <span class="unit">m/s</span>
+            <input name="weather.gust_strong_ms" type="number" step="1" min="0" max="100" inputmode="decimal" required>
+            <small>FMI's wind warnings on land start around 20 m/s</small></label>
+          <label class="field">…or mean wind from <span class="unit">m/s</span>
+            <input name="weather.wind_strong_ms" type="number" step="1" min="0" max="100" inputmode="decimal" required></label>
+          <label class="field">Hot weather: above <span class="unit">°C</span>
+            <input name="weather.hot_above_c" type="number" step="1" min="-60" max="60" inputmode="decimal" required></label>
+          <label class="field">Severe cold: below <span class="unit">°C</span>
+            <input name="weather.cold_below_c" type="number" step="1" min="-60" max="60" inputmode="decimal" required></label>
+          <label class="field">Heavy rain: in a day from <span class="unit">mm</span>
+            <input name="weather.rain_heavy_day_mm" type="number" step="1" min="0.1" max="1000" inputmode="decimal" required></label>
+          <label class="field">…or in an hour from <span class="unit">mm</span>
+            <input name="weather.rain_heavy_hour_mm" type="number" step="0.5" min="0.1" max="1000" inputmode="decimal" required></label>
+          <label class="field">Heavy snowfall: in a day from <span class="unit">mm water</span>
+            <input name="weather.snow_heavy_day_mm" type="number" step="1" min="0.1" max="1000" inputmode="decimal" required>
+            <small>1 mm of water is roughly 1–2 cm of fresh snow</small></label>
+        </details>
       </fieldset>
 
       <fieldset class="panel">

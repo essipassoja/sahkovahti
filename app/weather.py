@@ -20,22 +20,13 @@ from email.utils import parsedate_to_datetime
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
-from .config import Config
+from .config import Config, WeatherSettings
 
 log = logging.getLogger("weather")
 URL = "https://api.met.no/weatherapi/locationforecast/2.0/complete?lat={lat}&lon={lon}"   # complete has gusts
 WARNINGS_URL = "https://alerts.fmi.fi/cap/feed/atom_en-GB.xml"
 GEOCODE_URL = "https://nominatim.openstreetmap.org/search?"
 USER_AGENT = "sahkovahti/1.0 github.com/essipassoja/sahkovahti"
-
-# "Dramatic weather" thresholds for the heads-up block on the weather dashboard
-GUST_STRONG = 20.0      # m/s; FMI's land wind warnings start around here
-WIND_STRONG = 15.0      # m/s mean wind
-HOT = 25.0              # °C, above
-COLD = -25.0            # °C, below
-RAIN_HEAVY_DAY = 15.0   # mm in a day
-RAIN_HEAVY_HOUR = 5.0   # mm in an hour
-SNOW_HEAVY_DAY = 8.0    # mm water in a day, roughly 8–15 cm of fresh snow
 
 
 def geocode(text: str, limit: int = 5) -> list[dict]:
@@ -58,9 +49,9 @@ def _epoch(s: str) -> int:
 
 
 def summarize(payload: dict, now: float, tz: ZoneInfo | None = None,
-              hours: int = 12, step: int = 3, days: int = 3) -> dict:
+              hours: int = 12, step: int = 3, days: int = 3, limits: WeatherSettings | None = None) -> dict:
     """Weather now, a few upcoming points, daily summaries for the next days and any
-    dramatic weather ahead, from a Locationforecast payload."""
+    dramatic weather ahead (by the limits in `limits`), from a Locationforecast payload."""
     tz = tz or ZoneInfo("Europe/Helsinki")
     series = payload.get("properties", {}).get("timeseries", [])
 
@@ -86,7 +77,7 @@ def summarize(payload: dict, now: float, tz: ZoneInfo | None = None,
     blocks = _blocks(series, pts, cur["ts"] if cur else now)
     day_list = _days(blocks, now, tz, days)
     return {"now": cur, "next": later, "days": day_list,
-            "extremes": _extremes(blocks, now, tz, days),
+            "extremes": _extremes(blocks, now, tz, days, limits or WeatherSettings()),
             "updated_at": payload.get("properties", {}).get("meta", {}).get("updated_at")}
 
 
@@ -148,7 +139,7 @@ def _days(blocks: list, now: float, tz: ZoneInfo, n: int) -> list[dict]:
     return out
 
 
-def _extremes(blocks: list, now: float, tz: ZoneInfo, n: int) -> list[dict]:
+def _extremes(blocks: list, now: float, tz: ZoneInfo, n: int, lim: WeatherSettings) -> list[dict]:
     """Dramatic weather from now to the end of the last summarized day, one entry per kind."""
     end = _midnight(_local_day(now, tz) + timedelta(days=n + 1), tz)
     bs = [b for b in blocks if b["ts"] < end]
@@ -159,14 +150,14 @@ def _extremes(blocks: list, now: float, tz: ZoneInfo, n: int) -> list[dict]:
         return pick(have, key=lambda b: b[key]) if have else None
 
     g, w = peak("gust"), peak("wind")
-    if (g and g["gust"] >= GUST_STRONG) or (w and w["wind"] >= WIND_STRONG):
-        top = g if g and g["gust"] >= GUST_STRONG else w
+    if (g and g["gust"] >= lim.gust_strong_ms) or (w and w["wind"] >= lim.wind_strong_ms):
+        top = g if g and g["gust"] >= lim.gust_strong_ms else w
         out.append({"kind": "wind", "ts": top["ts"], "gust": g["gust"] if g else None,
                     "wind": w["wind"] if w else None})
     hot, cold = peak("tmax"), peak("tmin", min)
-    if hot and hot["tmax"] > HOT:
+    if hot and hot["tmax"] > lim.hot_above_c:
         out.append({"kind": "heat", "ts": hot["ts"], "temp": hot["tmax"]})
-    if cold and cold["tmin"] < COLD:
+    if cold and cold["tmin"] < lim.cold_below_c:
         out.append({"kind": "cold", "ts": cold["ts"], "temp": cold["tmin"]})
 
     # rain and snow per local day, the rest of today included; report the first heavy day
@@ -176,9 +167,9 @@ def _extremes(blocks: list, now: float, tz: ZoneInfo, n: int) -> list[dict]:
         d["snow" if b["snow"] else "rain"] += b["precip"]
         if b["len"] == 3600 and not b["snow"] and (d["hour"] is None or b["precip"] > d["hour"]["precip"]):
             d["hour"] = b
-    for kind, limit in (("rain", RAIN_HEAVY_DAY), ("snow", SNOW_HEAVY_DAY)):
+    for kind, limit in (("rain", lim.rain_heavy_day_mm), ("snow", lim.snow_heavy_day_mm)):
         for day, d in sorted(per_day.items()):
-            hour = d["hour"] if kind == "rain" and d["hour"] and d["hour"]["precip"] >= RAIN_HEAVY_HOUR else None
+            hour = d["hour"] if kind == "rain" and d["hour"] and d["hour"]["precip"] >= lim.rain_heavy_hour_mm else None
             if d[kind] >= limit or hour:
                 e = {"kind": kind, "ts": _midnight(day, tz), "total_mm": round(d[kind], 1)}
                 if hour:
@@ -327,4 +318,4 @@ class Weather:
             return {"enabled": True, "error": self.last_error or "no data"}
         return {"enabled": True, "place": w.place,
                 "warnings": self.warnings.get(*loc),
-                **summarize(payload, time.time(), self.cfg.tz, hours=24)}
+                **summarize(payload, time.time(), self.cfg.tz, hours=24, limits=w)}

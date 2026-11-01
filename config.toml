@@ -62,6 +62,14 @@ enabled   = true
 place     = "Helsinki"
 latitude  = 60.1699
 longitude = 24.9384
+# "Dramatic weather" shown on the Heads up dashboard (also on the Settings page, under Weather)
+gust_strong_ms     = 20.0    # strong wind: gusts at or above this, m/s
+wind_strong_ms     = 15.0    # ...or mean wind at or above this, m/s
+hot_above_c        = 25.0    # hot weather: warmer than this, °C
+cold_below_c       = -25.0   # severe cold: colder than this, °C
+rain_heavy_day_mm  = 15.0    # heavy rain: this much in a day, mm
+rain_heavy_hour_mm = 5.0     # ...or this much in an hour, mm
+snow_heavy_day_mm  = 8.0     # heavy snowfall: mm of water in a day (roughly 8–15 cm of snow)
 
 [traffic_light]
 # The front page shows green / yellow / red: is now a good time to run big loads

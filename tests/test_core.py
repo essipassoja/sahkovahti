@@ -560,7 +560,8 @@ class WeatherTest(unittest.TestCase):
         from app.config import WeatherSettings
         w = WeatherSettings(latitude="61.49781234", longitude=23.761)
         self.assertEqual((w.latitude, w.longitude), (61.4978, 23.761))
-        for bad in ({"latitude": 91}, {"longitude": "x"}, {"enabled": "yes"}):
+        for bad in ({"latitude": 91}, {"longitude": "x"}, {"enabled": "yes"}, {"gust_strong_ms": -1},
+                    {"hot_above_c": -30}, {"rain_heavy_day_mm": 0}):
             with self.assertRaises(ValueError):
                 WeatherSettings(**bad)
 
@@ -588,6 +589,11 @@ class WeatherTest(unittest.TestCase):
         self.assertEqual(set(kinds), {"wind", "snow"})
         self.assertEqual(kinds["wind"]["gust"], 23.0)
         self.assertEqual(kinds["snow"]["total_mm"], 12.0)
+        # your own limits: calmer wind and more snow needed, a mild "cold" limit
+        from app.config import WeatherSettings
+        lim = WeatherSettings(gust_strong_ms=25, wind_strong_ms=10, snow_heavy_day_mm=20, cold_below_c=0)
+        w = summarize({"properties": {"timeseries": series}}, t0 + 600, limits=lim)
+        self.assertEqual({e["kind"] for e in w["extremes"]}, {"cold"})
 
     def test_warnings_for_location(self):
         def alert(ident, poly, msg="Alert", refs="", expires="2026-10-20T00:00:00+03:00", color="yellow"):
