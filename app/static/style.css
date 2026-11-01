@@ -173,20 +173,6 @@ button.ghost { background: transparent; }
 
 .simple-page .wrap { max-width: 980px; }
 .simple { display: grid; gap: 16px; }
-.light-card { display: flex; align-items: center; gap: 28px; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 20px; padding: 24px; border-left: 8px solid var(--lamp-off); }
-.light-card[data-level="green"]  { border-left-color: var(--lamp-green); }
-.light-card[data-level="yellow"] { border-left-color: var(--lamp-yellow); }
-.light-card[data-level="red"]    { border-left-color: var(--lamp-red); }
-.lamps { flex: none; display: flex; flex-direction: column; gap: 9px; padding: 11px; border-radius: 24px; background: #1d1d1b; }
-.lamp { width: 48px; height: 48px; border-radius: 50%; background: #3a3a36; }
-.light-card[data-level="red"] .lamp.red { background: var(--lamp-red); box-shadow: 0 0 22px var(--lamp-red); }
-.light-card[data-level="yellow"] .lamp.yellow { background: var(--lamp-yellow); box-shadow: 0 0 22px var(--lamp-yellow); }
-.light-card[data-level="green"] .lamp.green { background: var(--lamp-green); box-shadow: 0 0 22px var(--lamp-green); }
-.verdict h2 { font-size: 30px; line-height: 1.15; letter-spacing: -0.02em; }
-.verdict p { margin: 8px 0 0; color: var(--text-2); font-size: 17px; }
-.verdict .next { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
-.verdict .legend { font-size: 13px; color: var(--muted); }
 
 .big-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
 .big-tile { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 20px 22px; }
@@ -194,6 +180,17 @@ button.ghost { background: transparent; }
 .big-tile .value { font-size: 56px; font-weight: 650; letter-spacing: -0.03em; line-height: 1.1; margin-top: 6px; font-variant-numeric: tabular-nums; }
 .big-tile .value small { font-size: 20px; font-weight: 500; color: var(--text-2); margin-left: 6px; letter-spacing: 0; }
 .big-tile .sub { font-size: 14px; color: var(--text-2); margin-top: 6px; font-variant-numeric: tabular-nums; }
+/* spot price tile tinted with the traffic light; the level is also written out, never colour alone */
+.spot-tile { --lv: var(--lamp-off); background: color-mix(in srgb, var(--lv) 16%, var(--surface));
+  border-color: color-mix(in srgb, var(--lv) 55%, var(--border)); box-shadow: inset 6px 0 0 var(--lv); }
+.spot-tile[data-level="green"] { --lv: var(--lamp-green); }
+.spot-tile[data-level="yellow"] { --lv: var(--lamp-yellow); }
+.spot-tile[data-level="red"] { --lv: var(--lamp-red); }
+.spot-tile .level { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 16px; font-weight: 650; }
+.spot-tile .pip { width: 14px; height: 14px; border-radius: 50%; background: var(--lv); box-shadow: 0 0 10px var(--lv); flex: none; }
+.spot-tile .next { margin-top: 2px; color: var(--text); }
+.elec-chart { gap: 10px; padding: 18px 22px 16px; }
+.elec-chart .hu-title h2 { font-size: 20px; }
 /* dashboards: one per slide, swipe or wait */
 .slides { display: flex; align-items: flex-start; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x mandatory;
   scrollbar-width: none; -webkit-overflow-scrolling: touch; }
@@ -305,23 +302,13 @@ button.ghost { background: transparent; }
   :root:not([data-theme="light"]) { --art-sky: #1d2833; --art-cloud: #4a5866; --art-hill-back: #23412a; --art-hill-front: #2e5a36; --art-wall: #d9cfbd; --art-tree: #3f7d46; }
 }
 :root[data-theme="dark"] { --art-sky: #1d2833; --art-cloud: #4a5866; --art-hill-back: #23412a; --art-hill-front: #2e5a36; --art-wall: #d9cfbd; --art-tree: #3f7d46; }
-/* prices dashboard: today (and tomorrow once published) coloured by the traffic light */
+/* today's prices on the electricity dashboard, coloured by the traffic light */
 .pc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 24px; display: grid; gap: 16px; }
-.pc-days { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-.pc-days li { padding: 12px 16px; border-radius: 14px; background: color-mix(in srgb, var(--text) 4%, transparent); font-variant-numeric: tabular-nums; }
-.pc-days .d { font-size: 14px; font-weight: 600; color: var(--text-2); }
-.pc-days .avg { font-size: 34px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; }
-.pc-days .avg small { font-size: 15px; font-weight: 500; color: var(--text-2); margin-left: 5px; letter-spacing: 0; }
-.pc-days .rng { font-size: 14px; color: var(--text-2); }
 .pc-chart .lvl-green { fill: var(--lamp-green); }
 .pc-chart .lvl-yellow { fill: var(--lamp-yellow); }
 .pc-chart .lvl-red { fill: var(--lamp-red); }
 .pc-chart .past { opacity: .35; }
 .pc-chart .reflabel, .pc-chart .nowlabel { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
-.pc-chart .divider { stroke: var(--text-2); stroke-width: 1; opacity: .5; }
-.pc-chart .axis .day { fill: var(--text-2); font-weight: 600; }
-.pc-legend { list-style: none; margin: -4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; color: var(--text-2); }
-.pc-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .wx-now { display: flex; align-items: center; gap: 22px; }
 .wx-icon { font-size: 96px; line-height: 1; }
 .weather-card .label { font-size: 16px; color: var(--text-2); }
@@ -349,15 +336,6 @@ button.ghost { background: transparent; }
 }
 
 @media (max-width: 600px) {
-  .light-card { flex-direction: column; text-align: center; padding: 20px 16px; border-left-width: 1px; border-top: 8px solid var(--lamp-off); }
-  .light-card[data-level="green"]  { border-top-color: var(--lamp-green); }
-  .light-card[data-level="yellow"] { border-top-color: var(--lamp-yellow); }
-  .light-card[data-level="red"]    { border-top-color: var(--lamp-red); }
-  .light-card[data-level] { border-left-color: var(--border); }
-  .lamps { flex-direction: row; padding: 8px 11px; }
-  .lamp { width: 40px; height: 40px; }
-  .verdict h2 { font-size: 25px; }
-  .verdict p { font-size: 15px; }
   .big-tiles { grid-template-columns: 1fr; gap: 12px; }
   .big-tile:last-child { grid-column: auto; }
   .big-tile .value { font-size: 44px; }

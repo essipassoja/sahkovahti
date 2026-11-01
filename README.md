@@ -5,10 +5,9 @@ A small local web app that shows your household's electricity use next to the Fi
 
 - **Front page for phone / tablet**: dashboards that rotate every 10 s (swipe, tap the dots or use the
   arrow keys to switch):
-  - **Electricity**: a green / yellow / red traffic light telling whether now is a good time for big loads,
-    plus price now and power now. Thresholds are set in `[traffic_light]` in `config.toml`
-  - **Prices**: today's prices as a chart coloured like the traffic light, with tomorrow's added once
-    they're published (around 14.00), and each day's average, lowest and highest price
+  - **Electricity**: today's prices as a chart, and the spot price now coloured green / yellow / red to tell
+    whether now is a good time for big loads, plus price now and power now. Thresholds are set in
+    `[traffic_light]` in `config.toml`
   - **Weather**: now, the next 24 hours and the next 3 days from Yr (MET Norway), with official FMI warnings
   - **Calendar**: today and the coming days from your Google Calendar (or any iCal address)
   - **Heads up**: dramatic weather ahead, and tomorrow's electricity once its prices are out

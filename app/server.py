@@ -141,7 +141,7 @@ class App:
         return {"tomorrow": analysis.day_outlook(tomorrow, self.cfg, self.db)}
 
     def prices_today(self, _q):
-        return analysis.price_days(self.cfg, self.db)
+        return analysis.price_days(self.cfg, self.db, n=1)
 
     def geocode(self, q):
         text = (q.get("q", [""])[0] or "").strip()

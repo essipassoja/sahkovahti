@@ -32,23 +32,21 @@
     <div class="dots" id="dots" role="tablist" aria-label="Dashboards"></div>
     <div class="slides" id="slides">
       <section class="slide simple" id="slideElec" aria-roledescription="dashboard" aria-label="Electricity">
-        <div class="light-card" id="lightCard" data-level="none" aria-live="polite">
-          <div class="lamps" aria-hidden="true">
-            <span class="lamp red"></span><span class="lamp yellow"></span><span class="lamp green"></span>
+        <div class="pc-card elec-chart">
+          <div class="hu-title">
+            <h2>Today</h2>
+            <span id="legend">&nbsp;</span>
           </div>
-          <div class="verdict">
-            <h2 id="verdict">Loading…</h2>
-            <p id="advice">&nbsp;</p>
-            <p class="next" id="nextChange">&nbsp;</p>
-            <p class="legend" id="legend">&nbsp;</p>
-          </div>
+          <div class="chart pc-chart" id="elecChart"></div>
         </div>
 
         <div class="big-tiles" aria-label="Right now">
-          <div class="big-tile">
+          <div class="big-tile spot-tile" id="spotTile" data-level="none" aria-live="polite">
             <div class="label" id="spotLabel">Spot price now</div>
             <div class="value"><span id="spotNow">–</span><small>c/kWh</small></div>
             <div class="sub" id="spotSub">&nbsp;</div>
+            <div class="level"><span class="pip" aria-hidden="true"></span><span id="verdict">Loading…</span></div>
+            <div class="sub next" id="nextChange">&nbsp;</div>
           </div>
           <div class="big-tile">
             <div class="label">Price now</div>
@@ -63,19 +61,6 @@
         </div>
 
         <p class="sim-note" id="simNote" hidden>Consumption is simulated until the HAN reader is connected. Prices are real.</p>
-      </section>
-
-      <section class="slide" id="prices" aria-roledescription="dashboard" aria-label="Prices today and tomorrow">
-        <div class="pc-card">
-          <div class="hu-title">
-            <h2 id="pcTitle">Prices today</h2>
-            <span id="pcBasis">&nbsp;</span>
-          </div>
-          <ol class="pc-days" id="pcDays"></ol>
-          <div class="chart pc-chart" id="pcChart"></div>
-          <ul class="pc-legend" id="pcLegend" aria-label="Traffic light levels"></ul>
-          <p class="hu-foot" id="pcFoot" hidden>Tomorrow's prices come out around 14.00.</p>
-        </div>
       </section>
 
       <section class="slide simple" id="weather" aria-roledescription="dashboard" aria-label="Weather" hidden>
