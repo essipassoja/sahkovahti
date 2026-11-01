@@ -8,7 +8,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from app.analysis import cheapest_windows, day_report, spot_at, spot_prices, traffic_light  # noqa: E402
+from app.analysis import cheapest_windows, day_report, price_days, spot_at, spot_prices, traffic_light  # noqa: E402
 from datetime import date, datetime  # noqa: E402
 from zoneinfo import ZoneInfo  # noqa: E402
 
@@ -408,6 +408,17 @@ class HourlyPriceTests(unittest.TestCase):
         self.assertEqual(rep["slot_s"], 3600)
         self.assertEqual(len(rep["slots"]), 24)
         self.assertEqual([s["spot"] for s in rep["slots"][:4]], [None, None, 5, 20])   # prices from 02:00
+
+    def test_price_days_per_billing_slot(self):
+        cfg = Config(raw={}, tz=HEL, db_path=None, host="", port=0, tariff=Tariff(tz=HEL))
+        r = price_days(cfg, self.db, today=date(1970, 1, 1))
+        self.assertEqual([d["date"] for d in r["days"]], ["1970-01-01", "1970-01-02"])
+        self.assertEqual(r["days"][0]["prices"][:3], [[0, 2], [900, 4], [1800, 6]])
+        self.assertEqual(r["days"][1]["prices"], [])                    # tomorrow not published
+        self.assertFalse(r["days"][0]["complete"])                      # only 2 hours of today known
+        cfg.tariff = Tariff(price_resolution="hour", tz=HEL)
+        r = price_days(cfg, self.db, today=date(1970, 1, 1))
+        self.assertEqual((r["slot_s"], r["days"][0]["prices"]), (3600, [[0, 5], [3600, 20]]))
 
     def test_cheapest_window_is_a_billing_hour(self):
         import app.analysis as analysis

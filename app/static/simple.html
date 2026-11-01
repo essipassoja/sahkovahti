@@ -65,6 +65,19 @@
         <p class="sim-note" id="simNote" hidden>Consumption is simulated until the HAN reader is connected. Prices are real.</p>
       </section>
 
+      <section class="slide" id="prices" aria-roledescription="dashboard" aria-label="Prices today and tomorrow">
+        <div class="pc-card">
+          <div class="hu-title">
+            <h2 id="pcTitle">Prices today</h2>
+            <span id="pcBasis">&nbsp;</span>
+          </div>
+          <ol class="pc-days" id="pcDays"></ol>
+          <div class="chart pc-chart" id="pcChart"></div>
+          <ul class="pc-legend" id="pcLegend" aria-label="Traffic light levels"></ul>
+          <p class="hu-foot" id="pcFoot" hidden>Tomorrow's prices come out around 14.00.</p>
+        </div>
+      </section>
+
       <section class="slide simple" id="weather" aria-roledescription="dashboard" aria-label="Weather" hidden>
         <div class="weather-card">
           <div class="wx-top">
@@ -156,7 +169,9 @@
   <a href="/settings">Settings<small>Your contract, transfer prices, traffic light, weather and calendar</small></a>
 </nav>
 <div class="scrim" id="scrim" hidden></div>
+<div class="tip" id="tip" role="tooltip" hidden></div>
 <script src="/static/nav.js"></script>
+<script src="/static/charts.js"></script>
 <script src="/static/simple.js"></script>
 </body>
 </html>

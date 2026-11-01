@@ -305,6 +305,23 @@ button.ghost { background: transparent; }
   :root:not([data-theme="light"]) { --art-sky: #1d2833; --art-cloud: #4a5866; --art-hill-back: #23412a; --art-hill-front: #2e5a36; --art-wall: #d9cfbd; --art-tree: #3f7d46; }
 }
 :root[data-theme="dark"] { --art-sky: #1d2833; --art-cloud: #4a5866; --art-hill-back: #23412a; --art-hill-front: #2e5a36; --art-wall: #d9cfbd; --art-tree: #3f7d46; }
+/* prices dashboard: today (and tomorrow once published) coloured by the traffic light */
+.pc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 22px 24px; display: grid; gap: 16px; }
+.pc-days { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.pc-days li { padding: 12px 16px; border-radius: 14px; background: color-mix(in srgb, var(--text) 4%, transparent); font-variant-numeric: tabular-nums; }
+.pc-days .d { font-size: 14px; font-weight: 600; color: var(--text-2); }
+.pc-days .avg { font-size: 34px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; }
+.pc-days .avg small { font-size: 15px; font-weight: 500; color: var(--text-2); margin-left: 5px; letter-spacing: 0; }
+.pc-days .rng { font-size: 14px; color: var(--text-2); }
+.pc-chart .lvl-green { fill: var(--lamp-green); }
+.pc-chart .lvl-yellow { fill: var(--lamp-yellow); }
+.pc-chart .lvl-red { fill: var(--lamp-red); }
+.pc-chart .past { opacity: .35; }
+.pc-chart .reflabel, .pc-chart .nowlabel { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+.pc-chart .divider { stroke: var(--text-2); stroke-width: 1; opacity: .5; }
+.pc-chart .axis .day { fill: var(--text-2); font-weight: 600; }
+.pc-legend { list-style: none; margin: -4px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13.5px; color: var(--text-2); }
+.pc-legend .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
 .wx-now { display: flex; align-items: center; gap: 22px; }
 .wx-icon { font-size: 96px; line-height: 1; }
 .weather-card .label { font-size: 16px; color: var(--text-2); }

@@ -225,6 +225,84 @@
     renderHeadsUp();
   }
 
+  // Prices dashboard: today's prices, and tomorrow's once published, coloured like the traffic light
+  let pc = null;
+  const LEVEL = (p) => (p < pc.green_below ? "green" : p > pc.red_above ? "red" : "yellow");
+  const dayLabel = (iso, k) => k === 0 ? "Today"
+    : k === 1 ? "Tomorrow" : new Intl.DateTimeFormat("en-GB", { weekday: "long" }).format(new Date(iso + "T12:00"));
+
+  function renderPrices() {
+    if (!pc) return;
+    // today with whatever is known; later days only once fully published
+    const days = pc.days.filter((d, k) => (k === 0 ? d.prices.length : d.complete));
+    const both = days.length > 1;
+    $("pcTitle").textContent = both ? "Prices today and tomorrow" : "Prices today";
+    $("pcBasis").textContent = (pc.basis === "spot" ? "your spot price" : "your total price") + ", c/kWh incl. VAT";
+    $("pcFoot").hidden = both || pc.days.length < 2;
+
+    $("pcDays").replaceChildren(...days.map((d) => {
+      const k = pc.days.indexOf(d), ps = d.prices.map((x) => x[1]);
+      const lo = d.prices.reduce((a, b) => (b[1] < a[1] ? b : a)), hi = d.prices.reduce((a, b) => (b[1] > a[1] ? b : a));
+      const li = el("li");
+      const avg = el("div", "avg", num(ps.reduce((a, b) => a + b, 0) / ps.length, f1));
+      avg.append(el("small", null, "c average"));
+      li.append(el("div", "d", dayLabel(d.date, k)), avg,
+        el("div", "rng", `lowest ${num(lo[1], f1)} c at ${hm(lo[0])} · highest ${num(hi[1], f1)} c at ${hm(hi[0])}`));
+      return li;
+    }));
+
+    // one bar per billing slot over the shown days; slots without a price stay empty
+    const now = Date.now() / 1000, step = pc.slot_s, items = [], dividers = [], starts = new Map();
+    for (const d of days) {
+      if (items.length) dividers.push(items.length);
+      starts.set(items.length, d);
+      const byStart = new Map(d.prices), name = dayLabel(d.date, pc.days.indexOf(d));
+      for (let t = d.start; t < d.end; t += step) {
+        const p = byStart.get(t), lv = p == null ? null : LEVEL(p);
+        items.push({
+          t, y: p ?? null, cls: (lv ? "lvl-" + lv : "") + (t + step <= now ? " past" : ""),
+          tip: p == null ? null : `<div class="t">${name} ${hm(t)}–${hm(t + step)}</div>` +
+            `<div class="r"><span><span class="sw" style="background:var(--lamp-${lv})"></span>${NAME[lv]}</span><b>${num(p, f2)} c/kWh</b></div>`,
+        });
+      }
+    }
+    const box = $("pcChart"), narrow = box.clientWidth < 560, nowIndex = items.findIndex((it) => it.t <= now && now < it.t + step);
+    Charts.bars(box, items, {
+      height: Math.round(Math.max(200, Math.min(360, box.clientWidth * 0.36))),
+      label: $("pcTitle").textContent,
+      yFmt: (v) => f0.format(v),
+      refs: [{ value: pc.red_above, label: `red over ${num(pc.red_above, f0)} c` },
+             { value: pc.green_below, label: `green under ${num(pc.green_below, f0)} c` }],
+      dividers,
+      nowIndex, nowLabel: "now",
+      xLabel: (i) => {
+        if (starts.has(i)) {
+          const d = starts.get(i), k = pc.days.indexOf(d);
+          return !both ? "00" : narrow && k > 0 ? new Intl.DateTimeFormat("en-GB", { weekday: "short" }).format(new Date(d.date + "T12:00")) : dayLabel(d.date, k);
+        }
+        const t = hm(items[i].t);           // "06.00"
+        return (narrow ? /^12\.00$/ : /^(06|12|18)\.00$/).test(t) ? t.slice(0, 2) : null;
+      },
+      emptyText: "No prices yet",
+    });
+    box.querySelectorAll(".axis text").forEach((t) => { if (/^[A-Z]/.test(t.textContent)) t.classList.add("day"); });
+
+    $("pcLegend").replaceChildren(...[
+      ["green", `green under ${num(pc.green_below, f1)} c`], ["yellow", "yellow in between"],
+      ["red", `red over ${num(pc.red_above, f1)} c`],
+    ].map(([lv, text]) => {
+      const li = el("li"), sw = el("span", "sw");
+      sw.style.background = `var(--lamp-${lv})`;
+      li.append(sw, text);
+      return li;
+    }));
+  }
+
+  async function loadPrices() {
+    try { pc = await get("/api/prices"); } catch { return; }
+    renderPrices();
+  }
+
   // Calendar dashboard: today on the left, the next days on the right
   const CAL_NEXT_MAX = 8;           // keeps the slide within a tablet screen
   const dayName = (iso) => {
@@ -398,6 +476,10 @@
     setInterval(loadWeather, 15 * 60000);
     loadOutlook();
     setInterval(loadOutlook, 5 * 60000);
+    loadPrices();
+    setInterval(loadPrices, 60000);         // moves "now" along and picks up tomorrow's prices
+    let rt;
+    window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderPrices, 150); });
     loadCalendar();
     setInterval(loadCalendar, 60000);       // the server re-reads calendars every 15 min; this keeps "Now" current
   })();

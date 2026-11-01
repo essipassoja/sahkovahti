@@ -200,6 +200,24 @@ def day_outlook(d: date, cfg: Config, db: DB) -> dict | None:
     return {**day, "verdict": verdict, "red": red, "red_above": cfg.light.red_above}
 
 
+def price_days(cfg: Config, db: DB, today: date | None = None, n: int = 2) -> dict:
+    """Prices for today and the next days, one per billing slot, on the traffic light's basis
+    (what its green / red limits compare). `complete` once every slot of the day has a price;
+    tomorrow's are published ~14 Finnish time, a few early hours may be known before that."""
+    today = today or datetime.now(cfg.tz).date()
+    step = cfg.tariff.slot_s
+    days = []
+    for i in range(n):
+        d = today + timedelta(days=i)
+        t0, t1 = day_bounds(d, cfg)
+        prices = [[q, round(p, 3)] for q, p in _light_series(t0, t1, cfg, db) if (q - t0) % step == 0]
+        days.append({"date": d.isoformat(), "start": t0, "end": t1, "prices": prices,
+                     "complete": len(prices) == (t1 - t0) // step})
+    tl = cfg.light
+    return {"basis": tl.basis, "green_below": tl.green_below, "red_above": tl.red_above,
+            "slot_s": step, "days": days}
+
+
 def traffic_light(cfg: Config, db: DB, now: int | None = None) -> dict:
     """Current green/yellow/red level and when it next changes (known prices only)."""
     now = int(time.time()) if now is None else now

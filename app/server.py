@@ -140,6 +140,9 @@ class App:
         tomorrow = datetime.now(self.cfg.tz).date() + timedelta(days=1)
         return {"tomorrow": analysis.day_outlook(tomorrow, self.cfg, self.db)}
 
+    def prices_today(self, _q):
+        return analysis.price_days(self.cfg, self.db)
+
     def geocode(self, q):
         text = (q.get("q", [""])[0] or "").strip()
         if len(text) < 2:
@@ -228,7 +231,7 @@ class App:
         "/api/live": "live", "/api/day": "day", "/api/history": "history",
         "/api/power": "power", "/api/cheapest": "cheapest", "/api/status": "status",
         "/api/settings": "settings", "/api/weather": "weather", "/api/outlook": "outlook",
-        "/api/calendar": "calendar",
+        "/api/calendar": "calendar", "/api/prices": "prices_today",
         "/api/geocode": "geocode",
     }
     POST_ROUTES = {

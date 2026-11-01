@@ -50,7 +50,8 @@
 
   /**
    * items: [{y, cls, future, tip: html}]  (y may be null = no data)
-   * opts:  {height, yFmt, xLabel(i) -> string|null, nowIndex, nowLabel, ref:{value,label}, onClick(i), emptyText}
+   * opts:  {height, yFmt, xLabel(i) -> string|null, nowIndex, nowLabel, ref:{value,label}, refs:[ref],
+   *          dividers:[index] (vertical lines before those bars, e.g. midnight), onClick(i), emptyText}
    */
   function bars(container, items, opts = {}) {
     const W = Math.max(280, container.clientWidth);
@@ -65,8 +66,9 @@
       el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", class: "empty" }, svg).textContent = opts.emptyText || "No data";
       return;
     }
+    const refs = (opts.refs || [opts.ref]).filter((r) => r && r.value != null);
     let yMin = Math.min(0, ...vals), yMax = Math.max(0, ...vals);
-    if (opts.ref && opts.ref.value != null) yMax = Math.max(yMax, opts.ref.value);
+    for (const r of refs) yMax = Math.max(yMax, r.value);
     const { lo, hi, ticks } = niceTicks(yMin, yMax, opts.ticks || 4);
     const y = (v) => m.t + ih - ((v - lo) / (hi - lo)) * ih;
     const step = iw / items.length;
@@ -94,10 +96,13 @@
       if (p) el("path", { d: p, class: (d.cls || "") + (d.future ? " future" : "") }, marks);
     });
     el("line", { class: "baseline", x1: m.l, x2: W - m.r, y1: y(0), y2: y(0) }, svg);
+    for (const i of opts.dividers || []) {
+      el("line", { class: "divider", x1: m.l + i * step, x2: m.l + i * step, y1: m.t - 4, y2: m.t + ih }, svg);
+    }
 
-    if (opts.ref && opts.ref.value != null) {
-      el("line", { class: "ref", x1: m.l, x2: W - m.r, y1: y(opts.ref.value), y2: y(opts.ref.value) }, svg);
-      el("text", { class: "reflabel", x: W - m.r, y: y(opts.ref.value) - 4, "text-anchor": "end" }, svg).textContent = opts.ref.label;
+    for (const r of refs) {
+      el("line", { class: "ref", x1: m.l, x2: W - m.r, y1: y(r.value), y2: y(r.value) }, svg);
+      el("text", { class: "reflabel", x: W - m.r, y: y(r.value) - 4, "text-anchor": "end" }, svg).textContent = r.label;
     }
     if (opts.nowIndex != null && opts.nowIndex >= 0 && opts.nowIndex < items.length) {
       const x = m.l + opts.nowIndex * step + step / 2;
