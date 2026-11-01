@@ -309,6 +309,39 @@ button.ghost { background: transparent; }
 .pc-chart .lvl-red { fill: var(--lamp-red); }
 .pc-chart .past { opacity: .35; }
 .pc-chart .reflabel, .pc-chart .nowlabel { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
+/* tiles that open a detail popup */
+.opens { cursor: pointer; }
+.opens .label::after, .opens h2::after { content: "›"; margin-left: 7px; color: var(--muted); font-weight: 400; }
+.opens:hover { border-color: color-mix(in srgb, var(--text-2) 50%, var(--border)); }
+.opens:focus-visible { outline: 2px solid var(--use); outline-offset: 2px; }
+.pop { width: min(900px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); padding: 0; overflow: auto;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 20px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.pop::backdrop { background: rgba(0,0,0,.45); }
+body:has(.pop[open]) { overflow: hidden; }
+.pop-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 18px 22px 12px; background: var(--surface); }
+.pop-body { display: grid; gap: 22px; padding: 4px 22px 22px; }
+.pop-day + .pop-day { border-top: 1px solid var(--border); padding-top: 20px; }
+.pop-day h3 { margin: 0 0 12px; font-size: 18px; }
+.pop-day h3 small { font-size: 14px; font-weight: 500; color: var(--text-2); }
+.pop-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.pop-stats > div { padding: 10px 14px; border-radius: 14px; background: color-mix(in srgb, var(--text) 4%, transparent); font-variant-numeric: tabular-nums; }
+.pop-stats span { display: block; font-size: 13px; color: var(--text-2); }
+.pop-stats b { display: block; font-size: 24px; font-weight: 650; letter-spacing: -0.02em; }
+.pop-stats small { display: block; font-size: 12.5px; color: var(--text-2); }
+.pop-levels { list-style: none; display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 12px 0 6px; padding: 0; font-size: 14px; color: var(--text-2); font-variant-numeric: tabular-nums; }
+.pop-levels .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
+.pop-note { margin: 0; font-size: 14px; color: var(--text-2); }
+.pop-day .pop-note + .chart, .pop-day .chart + .pop-note { margin-top: 8px; }
+@media (max-width: 600px) {
+  .pop { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .pop-head { padding: 14px 16px 10px; }
+  .pop-body { padding: 4px 16px 16px; }
+  .pop-stats { grid-template-columns: 1fr 1fr; gap: 8px; }
+  .pop-stats.three { grid-template-columns: repeat(3, 1fr); }
+  .pop-stats > div { padding: 8px 10px; }
+  .pop-stats b { font-size: 20px; }
+}
 .wx-now { display: flex; align-items: center; gap: 22px; }
 .wx-icon { font-size: 96px; line-height: 1; }
 .weather-card .label { font-size: 16px; color: var(--text-2); }

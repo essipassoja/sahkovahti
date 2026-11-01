@@ -230,22 +230,21 @@
   let pc = null;
   const LEVEL = (p) => (p < pc.green_below ? "green" : p > pc.red_above ? "red" : "yellow");
 
-  function renderPrices() {
-    if (!pc) return;
-    const box = $("elecChart"), d = pc.days[0], now = Date.now() / 1000, step = pc.slot_s;
+  // one day of prices as bars; slots without a price stay empty
+  function priceBars(box, d, { height, label, name = "" }) {
+    const now = Date.now() / 1000, step = pc.slot_s;
     const byStart = new Map(d.prices), items = [];
-    for (let t = d.start; t < d.end; t += step) {       // slots without a price stay empty
+    for (let t = d.start; t < d.end; t += step) {
       const p = byStart.get(t), lv = p == null ? null : LEVEL(p);
       items.push({
         t, y: p ?? null, cls: (lv ? "lvl-" + lv : "") + (t + step <= now ? " past" : ""),
-        tip: p == null ? null : `<div class="t">${hm(t)}–${hm(t + step)}</div>` +
+        tip: p == null ? null : `<div class="t">${name}${hm(t)}–${hm(t + step)}</div>` +
           `<div class="r"><span><span class="sw" style="background:var(--lamp-${lv})"></span>${NAME[lv]}</span><b>${num(p, f2)} c/kWh</b></div>`,
       });
     }
     const narrow = box.clientWidth < 560;
     Charts.bars(box, items, {
-      height: Math.round(Math.max(170, Math.min(260, box.clientWidth * 0.26))),
-      label: "Prices today",
+      height, label,
       yFmt: (v) => f0.format(v),
       refs: [{ value: pc.red_above, label: `red over ${num(pc.red_above, f0)} c` },
              { value: pc.green_below, label: `green under ${num(pc.green_below, f0)} c` }],
@@ -255,6 +254,132 @@
         return (narrow ? /^(00|12)\.00$/ : /^(00|06|12|18)\.00$/).test(t) ? t.slice(0, 2) : null;
       },
       emptyText: "No prices yet",
+    });
+  }
+
+  function renderPrices() {
+    if (!pc) return;
+    const box = $("elecChart");
+    priceBars(box, pc.days[0], { height: Math.round(Math.max(170, Math.min(260, box.clientWidth * 0.26))), label: "Prices today" });
+    if (pop.kind === "prices") renderPricePop();
+  }
+
+  // ---------- detail popups: prices today and tomorrow, power over the last 24 hours ----------
+  const pop = { kind: null, power: null, timer: null };
+  const dlg = $("pop");
+  const watts = (w, f = f2) => (w >= 1000 ? `${num(w / 1000, f)} kW` : `${num(w, f0)} W`);
+  const stat = (label, value, sub) => {
+    const box = el("div");
+    box.append(el("span", null, label), el("b", null, value));
+    if (sub) box.append(el("small", null, sub));
+    return box;
+  };
+
+  function openPop(kind) {
+    pop.kind = kind;
+    dlg.append($("tip"));         // the dialog sits above the page, so chart tooltips have to live inside it
+    if (!dlg.open) dlg.showModal();
+    dash.restart();               // holds the dashboards still while the popup is open
+    clearInterval(pop.timer);
+    if (kind === "prices") renderPricePop();
+    else {
+      renderPowerPop();
+      loadPowerPop();
+      pop.timer = setInterval(loadPowerPop, 60000);
+    }
+  }
+  dlg.addEventListener("close", () => {
+    pop.kind = null;
+    clearInterval(pop.timer);
+    Charts.hideTip();
+    document.body.append($("tip"));
+    $("popBody").replaceChildren();
+    dash.restart();
+  });
+  dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });   // a click on the backdrop
+  $("popClose").onclick = () => dlg.close();
+  for (const [id, kind] of [["elecCard", "prices"], ["spotTile", "prices"], ["powerTile", "power"]]) {
+    $(id).addEventListener("click", () => openPop(kind));
+    $(id).addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPop(kind); }
+    });
+  }
+
+  function renderPricePop() {
+    $("popTitle").textContent = "Prices";
+    $("popSub").textContent = pc ? (pc.basis === "spot" ? "your spot price" : "your total price") + ", c/kWh incl. VAT" : "";
+    if (!pc) { $("popBody").replaceChildren(el("p", "pop-note", "Loading prices…")); return; }
+    const step = pc.slot_s, charts = [];
+    $("popBody").replaceChildren(...pc.days.map((d, k) => {
+      const sec = el("section", "pop-day"), mid = d.start + 43200;
+      const head = el("h3", null, k === 0 ? "Today" : "Tomorrow");
+      head.append(el("small", null, ` ${weekday(mid, "long")} ${dayMonth(mid)}`));
+      sec.append(head);
+      if (!d.prices.length) {
+        sec.append(el("p", "pop-note", k === 0 ? "No prices for today yet." : "Tomorrow's prices come out around 14.00."));
+        return sec;
+      }
+      const ps = d.prices.map((x) => x[1]);
+      const lo = d.prices.reduce((a, b) => (b[1] < a[1] ? b : a)), hi = d.prices.reduce((a, b) => (b[1] > a[1] ? b : a));
+      const stats = el("div", "pop-stats three");
+      stats.append(stat("Average", `${num(ps.reduce((a, b) => a + b, 0) / ps.length, f1)} c`),
+        stat("Lowest", `${num(lo[1], f1)} c`, `at ${hm(lo[0])}`),
+        stat("Highest", `${num(hi[1], f1)} c`, `at ${hm(hi[0])}`));
+      // hours at each traffic light level
+      const levels = el("ul", "pop-levels");
+      levels.append(...["green", "yellow", "red"].map((lv) => {
+        const min = ps.filter((p) => LEVEL(p) === lv).length * step / 60;
+        const li = el("li"), sw = el("span", "sw");
+        sw.style.background = `var(--lamp-${lv})`;
+        li.append(sw, `${NAME[lv]} ${Math.floor(min / 60)} h` + (min % 60 ? ` ${min % 60} min` : ""));
+        return li;
+      }));
+      const box = el("div", "chart pc-chart");
+      sec.append(stats, levels, box);
+      if (!d.complete) sec.append(el("p", "pop-note", "Only part of the day's prices are published so far."));
+      charts.push([box, d, k]);
+      return sec;
+    }));
+    // drawn once in place, so the charts know their width
+    for (const [box, d, k] of charts) {
+      priceBars(box, d, { height: Math.round(Math.max(170, Math.min(240, box.clientWidth * 0.28))),
+        label: k === 0 ? "Prices today" : "Prices tomorrow", name: k === 0 ? "" : "Tomorrow " });
+    }
+  }
+
+  async function loadPowerPop() {
+    let d;
+    try { d = await get("/api/power?minutes=1440"); } catch { return; }
+    pop.power = d;
+    if (pop.kind === "power") renderPowerPop();
+  }
+
+  function renderPowerPop() {
+    $("popTitle").textContent = "Electricity use";
+    $("popSub").textContent = "last 24 hours, average power per 5 minutes";
+    const now = Date.now() / 1000, t0 = now - 86400;
+    const pts = (pop.power?.points || []).filter(([t]) => t >= t0).map(([t, p]) => ({ t, y: p }));
+    const stats = el("div", "pop-stats"), box = el("div", "chart");
+    if (pts.length > 1) {
+      const sum = pts.reduce((a, p) => a + p.y, 0);
+      const lo = pts.reduce((a, b) => (b.y < a.y ? b : a)), hi = pts.reduce((a, b) => (b.y > a.y ? b : a));
+      stats.append(stat("Used", `≈ ${num(sum * pop.power.bucket_s / 3.6e6, f1)} kWh`, "from the readings shown"),
+        stat("Average", watts(sum / pts.length)),
+        stat("Peak", watts(hi.y), `at ${when(hi.t)}`),
+        stat("Lowest", watts(lo.y), `always on · ${when(lo.t)}`));
+    }
+    $("popBody").replaceChildren(...(pts.length > 1 ? [stats] : []), box);
+    const narrow = box.clientWidth < 560, ticks = [];
+    for (let t = Math.ceil(t0 / 3600) * 3600; t <= now; t += 3600) {
+      if (+hm(t).slice(0, 2) % (narrow ? 6 : 3) === 0) ticks.push(t);
+    }
+    Charts.line(box, pts, {
+      height: Math.round(Math.max(200, Math.min(300, box.clientWidth * 0.32))),
+      tMin: t0, tMax: now, xTicks: ticks, xFmt: hm,
+      yFmt: (v) => (v >= 1000 ? f1.format(v / 1000) + "k" : f0.format(v)),
+      tip: (p) => `<div class="t">${when(p.t)}</div><div class="r"><span>Power</span><b>${watts(p.y)}</b></div>`,
+      label: "Power over the last 24 hours, watts",
+      emptyText: pop.power ? "No meter readings in the last 24 hours" : "Loading…",
     });
   }
 
@@ -384,7 +509,7 @@
     }
     function restart() {
       clearTimeout(timer);
-      if (held || document.hidden || slides().length < 2) return;
+      if (held || document.hidden || dlg.open || slides().length < 2) return;
       timer = setTimeout(() => { go(idx + 1); restart(); }, ROTATE_MS);
     }
     function refresh() {
@@ -417,13 +542,13 @@
     window.addEventListener("pointercancel", () => { if (held) { held = false; restart(); } });
     box.addEventListener("wheel", restart, { passive: true });
     document.addEventListener("keydown", (e) => {
-      if (e.target.closest("input, textarea, select") || !$("drawer").hidden) return;
+      if (e.target.closest("input, textarea, select") || !$("drawer").hidden || dlg.open) return;
       if (e.key === "ArrowRight") { go(idx + 1); restart(); }
       else if (e.key === "ArrowLeft") { go(idx - 1); restart(); }
     });
     document.addEventListener("visibilitychange", restart);
     window.addEventListener("resize", () => go(idx, false));
-    return { refresh, badges };
+    return { refresh, badges, restart };
   })();
 
   (async function boot() {
@@ -439,7 +564,7 @@
     loadPrices();
     setInterval(loadPrices, 60000);         // moves "now" along
     let rt;
-    window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(renderPrices, 150); });
+    window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { renderPrices(); if (pop.kind === "power") renderPowerPop(); }, 150); });
     loadCalendar();
     setInterval(loadCalendar, 60000);       // the server re-reads calendars every 15 min; this keeps "Now" current
   })();

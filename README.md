@@ -169,6 +169,7 @@ All JSON, handy for Home Assistant or your own scripts:
 | `GET /api/day?date=YYYY-MM-DD` | 15‑min slots: spot, total price, kWh, cost |
 | `GET /api/history?days=30` | daily totals + month to date |
 | `GET /api/power?minutes=180` | power time series |
+| `GET /api/prices` | today's and tomorrow's prices per billing slot, traffic light limits |
 | `GET /api/cheapest` | cheapest upcoming 1–4 h windows |
 | `GET /api/status` | meter/price status, tariff |
 | `POST /api/prices/refresh` | fetch prices now |

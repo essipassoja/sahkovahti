@@ -32,7 +32,7 @@
     <div class="dots" id="dots" role="tablist" aria-label="Dashboards"></div>
     <div class="slides" id="slides">
       <section class="slide simple" id="slideElec" aria-roledescription="dashboard" aria-label="Electricity">
-        <div class="pc-card elec-chart">
+        <div class="pc-card elec-chart opens" id="elecCard" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Today's prices, open today and tomorrow">
           <div class="hu-title">
             <h2>Today</h2>
             <span id="legend">&nbsp;</span>
@@ -41,7 +41,7 @@
         </div>
 
         <div class="big-tiles" aria-label="Right now">
-          <div class="big-tile spot-tile" id="spotTile" data-level="none" aria-live="polite">
+          <div class="big-tile spot-tile opens" id="spotTile" data-level="none" aria-live="polite" role="button" tabindex="0" aria-haspopup="dialog">
             <div class="label" id="spotLabel">Spot price now</div>
             <div class="value"><span id="spotNow">–</span><small>c/kWh</small></div>
             <div class="sub" id="spotSub">&nbsp;</div>
@@ -53,7 +53,7 @@
             <div class="value"><span id="priceNow">–</span><small>c/kWh</small></div>
             <div class="sub" id="priceSub">&nbsp;</div>
           </div>
-          <div class="big-tile">
+          <div class="big-tile opens" id="powerTile" role="button" tabindex="0" aria-haspopup="dialog">
             <div class="label">Using now</div>
             <div class="value"><span id="powerNow">–</span><small id="powerUnit">kW</small></div>
             <div class="sub" id="powerSub">&nbsp;</div>
@@ -154,6 +154,13 @@
   <a href="/settings">Settings<small>Your contract, transfer prices, traffic light, weather and calendar</small></a>
 </nav>
 <div class="scrim" id="scrim" hidden></div>
+<dialog class="pop" id="pop" aria-labelledby="popTitle">
+  <div class="pop-head">
+    <div class="hu-title"><h2 id="popTitle"></h2><span id="popSub"></span></div>
+    <button class="menu-btn" id="popClose" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="pop-body" id="popBody"></div>
+</dialog>
 <div class="tip" id="tip" role="tooltip" hidden></div>
 <script src="/static/nav.js"></script>
 <script src="/static/charts.js"></script>
