@@ -75,15 +75,19 @@ def summarize(payload: dict, now: float, tz: ZoneInfo | None = None,
     later = [p for p in pts if cur and cur["ts"] < p["ts"] <= cur["ts"] + hours * 3600
              and (p["ts"] - cur["ts"]) % (step * 3600) == 0]
     blocks = _blocks(series, pts, cur["ts"] if cur else now)
-    day_list = _days(blocks, now, tz, days)
-    return {"now": cur, "next": later, "days": day_list,
+    today = _local_day(now, tz)
+    end = _midnight(today + timedelta(days=days + 1), tz)
+    return {"now": cur, "next": later, "today": _day(blocks, today, tz),
+            "days": _days(blocks, now, tz, days),
+            "hourly": [b for b in blocks if b["ts"] < end],     # 1 h periods, 6 h further ahead
             "extremes": _extremes(blocks, now, tz, days, limits or WeatherSettings()),
             "updated_at": payload.get("properties", {}).get("meta", {}).get("updated_at")}
 
 
 def _blocks(series: list, pts: list, start: float) -> list[dict]:
     """Forecast cut into back-to-back periods (1 h where hourly data exists, else 6 h), so
-    precipitation can be summed without counting the same hours twice."""
+    precipitation can be summed without counting the same hours twice. Each carries the
+    details shown in the weather popup."""
     out = []
     for i, (e, p) in enumerate(zip(series, pts)):
         if p["ts"] < start or i + 1 >= len(pts):
@@ -92,13 +96,17 @@ def _blocks(series: list, pts: list, start: float) -> list[dict]:
         nxt = d.get("next_1_hours") if gap == 3600 else d.get("next_6_hours") if gap == 6 * 3600 else None
         if not nxt:
             continue
-        det = nxt.get("details", {})
+        det, inst = nxt.get("details", {}), d["instant"]["details"]
         temps = [t for t in (p["temp"], det.get("air_temperature_max"), det.get("air_temperature_min"))
                  if t is not None]
         sym = nxt.get("summary", {}).get("symbol_code") or ""
         out.append({"ts": p["ts"], "len": gap, "symbol": sym, "precip": det.get("precipitation_amount") or 0.0,
                     "tmax": max(temps, default=None), "tmin": min(temps, default=None),
-                    "wind": p["wind"], "gust": p["gust"],
+                    "temp": p["temp"], "wind": p["wind"], "gust": p["gust"], "dir": inst.get("wind_from_direction"),
+                    "precip_max": det.get("precipitation_amount_max"), "prob": det.get("probability_of_precipitation"),
+                    "thunder": det.get("probability_of_thunder"), "humidity": inst.get("relative_humidity"),
+                    "cloud": inst.get("cloud_area_fraction"), "pressure": inst.get("air_pressure_at_sea_level"),
+                    "uv": inst.get("ultraviolet_index_clear_sky"),
                     # sleet counts as rain; snow when the symbol says so or it's freezing
                     "snow": "snow" in sym or (p["temp"] is not None and p["temp"] <= 0.5 and "sleet" not in sym)})
     return out
@@ -112,30 +120,37 @@ def _midnight(day, tz: ZoneInfo) -> int:
     return int(datetime.combine(day, datetime.min.time(), tz).timestamp())
 
 
+def _day(blocks: list, day, tz: ZoneInfo) -> dict | None:
+    """One day's summary: min/max temperature, rain, wind, a midday symbol. For today, the rest of it."""
+    bs = [b for b in blocks if _local_day(b["ts"], tz) == day]
+    if not bs:
+        return None
+    noon = _midnight(day, tz) + 12 * 3600
+    mid = min(bs, key=lambda b: abs(b["ts"] + b["len"] / 2 - noon))
+    winds = [b["wind"] for b in bs if b["wind"] is not None]
+    gusts = [b["gust"] for b in bs if b["gust"] is not None]
+    return {
+        "date": day.isoformat(),
+        "ts": _midnight(day, tz),
+        "symbol": mid["symbol"].replace("_night", "_day").replace("_polartwilight", "_day"),
+        "tmax": max((b["tmax"] for b in bs if b["tmax"] is not None), default=None),
+        "tmin": min((b["tmin"] for b in bs if b["tmin"] is not None), default=None),
+        "precip_mm": round(sum(b["precip"] for b in bs), 1),
+        "snow_mm": round(sum(b["precip"] for b in bs if b["snow"]), 1),
+        "wind": max(winds, default=None),
+        "gust": max(gusts, default=None),
+    }
+
+
 def _days(blocks: list, now: float, tz: ZoneInfo, n: int) -> list[dict]:
-    """Daily summary for the n days after today: min/max temperature, rain, wind, a midday symbol."""
+    """Daily summaries for the n days after today."""
     today = _local_day(now, tz)
     out = []
     for k in range(1, n + 1):
-        day = today + timedelta(days=k)
-        bs = [b for b in blocks if _local_day(b["ts"], tz) == day]
-        if not bs:
+        d = _day(blocks, today + timedelta(days=k), tz)
+        if not d:
             break
-        noon = _midnight(day, tz) + 12 * 3600
-        mid = min(bs, key=lambda b: abs(b["ts"] + b["len"] / 2 - noon))
-        winds = [b["wind"] for b in bs if b["wind"] is not None]
-        gusts = [b["gust"] for b in bs if b["gust"] is not None]
-        out.append({
-            "date": day.isoformat(),
-            "ts": _midnight(day, tz),
-            "symbol": mid["symbol"].replace("_night", "_day").replace("_polartwilight", "_day"),
-            "tmax": max((b["tmax"] for b in bs if b["tmax"] is not None), default=None),
-            "tmin": min((b["tmin"] for b in bs if b["tmin"] is not None), default=None),
-            "precip_mm": round(sum(b["precip"] for b in bs), 1),
-            "snow_mm": round(sum(b["precip"] for b in bs if b["snow"]), 1),
-            "wind": max(winds, default=None),
-            "gust": max(gusts, default=None),
-        })
+        out.append(d)
     return out
 
 

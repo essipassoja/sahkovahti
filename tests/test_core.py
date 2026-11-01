@@ -577,8 +577,8 @@ class WeatherTest(unittest.TestCase):
                 WeatherSettings(**bad)
 
     def test_summarize_empty(self):
-        self.assertEqual(summarize({}, 0), {"now": None, "next": [], "days": [], "extremes": [],
-                                            "updated_at": None})
+        self.assertEqual(summarize({}, 0), {"now": None, "next": [], "today": None, "days": [], "hourly": [],
+                                            "extremes": [], "updated_at": None})
 
     def test_days_and_extremes(self):
         # hourly for 48 h, then 6-hourly, like MET; Helsinki is UTC+3 in October
@@ -596,6 +596,13 @@ class WeatherTest(unittest.TestCase):
         self.assertEqual(w["days"][0]["precip_mm"], 4.8)        # 24 × 0.2 mm, nothing counted twice
         self.assertEqual(w["days"][1]["snow_mm"], 12.0)         # 4 × 3 mm in 6-hour blocks
         self.assertEqual(w["days"][1]["gust"], 23.0)
+        self.assertEqual(w["today"]["date"], "2026-10-14")
+        self.assertEqual(w["today"]["precip_mm"], 4.8)         # the hour we're in counts towards today
+        # hourly periods from the current hour to the end of the last summarized day, then 6-hourly
+        self.assertEqual(w["hourly"][0]["ts"], t0)
+        self.assertEqual([b["len"] for b in w["hourly"]][46:50], [3600, 3600, 6 * 3600, 6 * 3600])
+        self.assertEqual(w["hourly"][-1]["ts"], t0 + 84 * 3600)        # the last point has no period after it
+        self.assertEqual((w["hourly"][0]["temp"], w["hourly"][0]["gust"]), (5.0, 8.0))
         kinds = {e["kind"]: e for e in w["extremes"]}
         self.assertEqual(set(kinds), {"wind", "snow"})
         self.assertEqual(kinds["wind"]["gust"], 23.0)

@@ -107,6 +107,9 @@ button.ghost { background: transparent; }
 .chart .empty { fill: var(--muted); font-size: 13px; }
 .chart .line { fill: none; stroke: var(--use); stroke-width: 2; stroke-linejoin: round; }
 .chart .area { fill: color-mix(in srgb, var(--use) 12%, transparent); }
+.chart .pt { fill: var(--use); stroke: var(--surface); stroke-width: 2; }
+.chart svg.temp .line { stroke: var(--price); }
+.chart svg.temp .pt { fill: var(--price); }
 .chart .hit { fill: transparent; cursor: pointer; }
 
 .day-summary { display: flex; flex-wrap: wrap; gap: 8px 22px; font-size: 13.5px; color: var(--text-2); margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
@@ -333,6 +336,35 @@ body:has(.pop[open]) { overflow: hidden; }
 .pop-levels .sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
 .pop-note { margin: 0; font-size: 14px; color: var(--text-2); }
 .pop-day .pop-note + .chart, .pop-day .chart + .pop-note { margin-top: 8px; }
+/* weather popup */
+.wx-days li.opens:hover, .wx-now.opens:hover { background: color-mix(in srgb, var(--text) 8%, transparent); }
+.wx-now.opens { border-radius: 16px; padding: 6px 12px 6px 6px; margin: -6px -12px -6px -6px; }
+.wx-next { cursor: pointer; }
+.pop-tabs { justify-self: start; max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.pop-tabs button { padding: 7px 14px; font-size: 14px; white-space: nowrap; }
+.wxp-head { display: flex; align-items: center; gap: 16px; }
+.wxp-head .wx-icon { font-size: 60px; }
+.wxp-head h3 { margin: 0; font-size: 22px; letter-spacing: -0.01em; }
+.wxp-head h3 small { font-size: 15px; font-weight: 500; color: var(--text-2); letter-spacing: 0; }
+.wxp-head p { margin: 2px 0 0; font-size: 16px; color: var(--text-2); }
+.wxp-sub { margin: 0 0 -12px; font-size: 13px; font-weight: 600; color: var(--text-2); text-transform: uppercase; letter-spacing: .04em; }
+.wxp-scroll { overflow-x: auto; }
+.wxp-table { width: 100%; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums; }
+.wxp-table th { text-align: left; font-weight: 600; font-size: 12.5px; color: var(--text-2); padding: 4px 8px; border-bottom: 1px solid var(--border); vertical-align: bottom; }
+.wxp-table td { padding: 5px 8px; border-bottom: 1px solid var(--grid); white-space: nowrap; }
+.wxp-table .num { text-align: left; }
+.wxp-table td small { color: var(--text-2); }
+.wxp-table .sky .i { font-size: 20px; vertical-align: -3px; margin-right: 8px; }
+.wxp-table .sky .txt { color: var(--text-2); }
+.wxp-table tr.wet td:nth-child(4) { color: var(--use-strong); font-weight: 600; }
+.wxp-table tr.snowy td:nth-child(4) { color: #8a5cd1; font-weight: 600; }
+.wxp-table .arr { display: inline-block; width: 1.1em; margin-right: 4px; text-align: center; color: var(--text-2); }
+.pop .wx-warn p { white-space: pre-line; }
+@media (max-width: 600px) {
+  .wxp-table .sky .txt, .wxp-table .opt { display: none; }
+  .wxp-table td, .wxp-table th { padding: 5px 5px; }
+  .wxp-head .wx-icon { font-size: 48px; }
+}
 @media (max-width: 600px) {
   .pop { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
   .pop-head { padding: 14px 16px 10px; }

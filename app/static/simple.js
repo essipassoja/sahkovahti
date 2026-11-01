@@ -129,10 +129,11 @@
   };
 
   function renderDays(days) {
-    $("wxDays").replaceChildren(...days.map((d) => {
-      const li = el("li");
+    $("wxDays").replaceChildren(...days.map((d, k) => {
+      const li = el("li", "opens");
       const [i, t] = wx(d.symbol);
       li.title = t;
+      opens(li, () => openPop("weather", k + 1));
       const head = el("div", "d", weekday(d.ts + 43200));
       head.append(el("small", null, " " + dayMonth(d.ts + 43200)));
       const temps = el("div", "v", deg(d.tmax) + "°");
@@ -144,20 +145,19 @@
     }));
   }
 
-  function renderWarnings(list) {
-    const now = Date.now() / 1000;
-    $("wxWarnings").replaceChildren(...list.map((w) => {
-      const box = el("article", "wx-warn");
-      box.dataset.color = w.color;
-      const head = el("div", "wh");
-      head.append(el("span", "wi", "⚠️"), el("strong", null, w.headline || w.event || "Weather warning"));
-      if (w.onset != null && w.onset <= now) head.append(el("span", "tag", "In effect"));
-      box.append(head);
-      if (w.impacts) box.append(el("p", null, w.impacts));
-      if (w.description) box.title = w.description;
-      return box;
-    }));
+  function warnBox(w, full = false) {
+    const box = el("article", "wx-warn");
+    box.dataset.color = w.color;
+    const head = el("div", "wh");
+    head.append(el("span", "wi", "⚠️"), el("strong", null, w.headline || w.event || "Weather warning"));
+    if (w.onset != null && w.onset <= Date.now() / 1000) head.append(el("span", "tag", "In effect"));
+    box.append(head);
+    if (w.impacts) box.append(el("p", null, w.impacts));
+    if (full && w.description) box.append(el("p", null, w.description));
+    else if (w.description) box.title = w.description;
+    return box;
   }
+  const renderWarnings = (list) => $("wxWarnings").replaceChildren(...list.map((w) => warnBox(w)));
 
   const ALERTS = {
     wind: ["💨", "Strong wind", (e) => [
@@ -265,7 +265,7 @@
   }
 
   // ---------- detail popups: prices today and tomorrow, power over the last 24 hours ----------
-  const pop = { kind: null, power: null, timer: null };
+  const pop = { kind: null, day: 0, power: null, timer: null };
   const dlg = $("pop");
   const watts = (w, f = f2) => (w >= 1000 ? `${num(w / 1000, f)} kW` : `${num(w, f0)} W`);
   const stat = (label, value, sub) => {
@@ -275,13 +275,27 @@
     return box;
   };
 
-  function openPop(kind) {
+  // a tile that opens a popup, by click, tap, Enter or Space
+  function opens(node, fn) {
+    node.setAttribute("role", "button");
+    node.setAttribute("tabindex", "0");
+    node.setAttribute("aria-haspopup", "dialog");
+    node.addEventListener("click", fn);
+    node.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); }
+    });
+  }
+
+  function openPop(kind, day = 0) {
     pop.kind = kind;
+    pop.day = day;
     dlg.append($("tip"));         // the dialog sits above the page, so chart tooltips have to live inside it
     if (!dlg.open) dlg.showModal();
     dash.restart();               // holds the dashboards still while the popup is open
     clearInterval(pop.timer);
+    dlg.scrollTop = 0;
     if (kind === "prices") renderPricePop();
+    else if (kind === "weather") renderWeatherPop();
     else {
       renderPowerPop();
       loadPowerPop();
@@ -298,10 +312,141 @@
   });
   dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });   // a click on the backdrop
   $("popClose").onclick = () => dlg.close();
-  for (const [id, kind] of [["elecCard", "prices"], ["spotTile", "prices"], ["powerTile", "power"]]) {
-    $(id).addEventListener("click", () => openPop(kind));
-    $(id).addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPop(kind); }
+  for (const [id, kind] of [["elecCard", "prices"], ["spotTile", "prices"], ["powerTile", "power"], ["wxNowBox", "weather"]]) {
+    opens($(id), () => openPop(kind));
+  }
+  $("wxNext").addEventListener("click", () => openPop("weather"));      // the next hours: today's details
+
+  // ---------- weather popup: one day at a time, today and the next days ----------
+  const COMPASS = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const compass = (d) => COMPASS[Math.round(d / 45) % 8];
+  const windArrow = (dir) => {      // points where the wind blows to
+    const a = el("span", "arr", "↑");
+    a.style.transform = `rotate(${dir + 180}deg)`;
+    a.setAttribute("aria-label", `from ${compass(dir)}`);
+    return a;
+  };
+  const span = (b) => (b.len > 3600 ? `${hm(b.ts)}–${hm(b.ts + b.len)}` : hm(b.ts));
+  const maxOf = (rows, k) => {
+    const v = rows.map((b) => b[k]).filter((x) => x != null);
+    return v.length ? Math.max(...v) : null;
+  };
+  const minOf = (rows, k) => {
+    const v = rows.map((b) => b[k]).filter((x) => x != null);
+    return v.length ? Math.min(...v) : null;
+  };
+
+  function renderWeatherPop() {
+    const w = wxData;
+    $("popTitle").textContent = "Weather";
+    $("popSub").textContent = w?.place || "";
+    if (!w?.now) { $("popBody").replaceChildren(el("p", "pop-note", "Loading the forecast…")); return; }
+    const list = [w.today, ...(w.days || [])];
+    if (!list[pop.day]) pop.day = Math.max(0, list.findIndex(Boolean));
+    const d = list[pop.day], mid = d.ts + 43200, today = pop.day === 0;
+    const rows = (w.hourly || []).filter((b) => isoDay(b.ts) === d.date);
+
+    const tabs = el("div", "seg pop-tabs");
+    tabs.setAttribute("role", "tablist");
+    list.forEach((x, k) => {
+      if (!x) return;
+      const t = x.ts + 43200;
+      const b = el("button", k === pop.day ? "on" : null, k === 0 ? "Today" : k === 1 ? "Tomorrow" : `${weekday(t)} ${dayMonth(t)}`);
+      b.type = "button";
+      b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(k === pop.day));
+      b.onclick = () => { pop.day = k; renderWeatherPop(); };
+      tabs.append(b);
+    });
+
+    // the day at a glance; today from the weather now
+    const [icon, text] = wx(today ? w.now.symbol : d.symbol);
+    const head = el("div", "wxp-head"), what = el("div");
+    what.append(el("h3", null, `${today ? "Today" : pop.day === 1 ? "Tomorrow" : weekday(mid, "long")}`),
+      el("p", null, today ? `${text} · ${deg(w.now.temp)} °C now` : text));
+    what.firstChild.append(el("small", null, ` ${today ? weekday(mid, "long") + " " : ""}${dayMonth(mid)}`));
+    head.append(el("span", "wx-icon", icon), what);
+
+    const stats = el("div", "pop-stats");
+    stats.append(stat(today ? "Rest of today" : "Temperature", `${deg(d.tmax)}° / ${deg(d.tmin)}°`, "high / low"));
+    const prob = maxOf(rows, "prob");
+    stats.append(stat("Precipitation", `${num(d.precip_mm, f1)} mm`,
+      [d.snow_mm >= 0.1 ? `${num(d.snow_mm, f1)} mm as snow` : null, prob != null ? `chance up to ${num(prob, f0)} %` : null]
+        .filter(Boolean).join(" · ") || null));
+    const windiest = rows.reduce((a, b) => (b.wind != null && (a == null || b.wind > a.wind) ? b : a), null);
+    stats.append(stat("Wind", `${num(d.wind, f0)} m/s`,
+      [d.gust != null ? `gusts ${num(d.gust, f0)} m/s` : null, windiest?.dir != null ? `from ${compass(windiest.dir)}` : null]
+        .filter(Boolean).join(" · ") || null));
+    const hLo = minOf(rows, "humidity"), hHi = maxOf(rows, "humidity");
+    if (hHi != null) stats.append(stat("Humidity", hLo === hHi ? `${num(hHi, f0)} %` : `${num(hLo, f0)}–${num(hHi, f0)} %`));
+    const clouds = rows.map((b) => b.cloud).filter((x) => x != null);
+    if (clouds.length) stats.append(stat("Cloud cover", `${num(clouds.reduce((a, b) => a + b, 0) / clouds.length, f0)} %`, "on average"));
+    const ps = rows.filter((b) => b.pressure != null);
+    if (ps.length) {
+      const change = ps[ps.length - 1].pressure - ps[0].pressure;
+      stats.append(stat("Air pressure", `${num(ps[0].pressure, f0)} hPa`,
+        ps.length < 2 ? null : Math.abs(change) < 2 ? "steady" : `${change > 0 ? "rising" : "falling"} to ${num(ps[ps.length - 1].pressure, f0)}`));
+    }
+    const uv = maxOf(rows, "uv");
+    if (uv != null && uv >= 1) stats.append(stat("UV index", num(uv, f0), "highest, clear sky"));
+    const thunder = maxOf(rows, "thunder");
+    if (thunder != null && thunder >= 5) stats.append(stat("Thunder", `${num(thunder, f0)} %`, "highest chance"));
+
+    // warnings in effect at some point of the day
+    const dayEnd = d.ts + 86400;
+    const warns = (w.warnings || []).filter((x) => (x.onset ?? 0) < dayEnd && x.expires > d.ts).map((x) => warnBox(x, true));
+
+    const chart = el("div", "chart");
+    const table = el("table", "wxp-table");
+    table.innerHTML = `<thead><tr><th>Time</th><th>Weather</th><th>Temp</th><th>Precip.</th><th>Wind (gust) m/s</th>` +
+      `<th class="opt">Humidity</th><th class="opt">Cloud</th></tr></thead>`;
+    const tbody = el("tbody");
+    for (const b of rows) {
+      const tr = el("tr"), [i, t] = wx(b.symbol);
+      const sky = el("td", "sky");
+      sky.append(el("span", "i", i), el("span", "txt", t));
+      const temp = el("td", "num", b.len > 3600 ? `${deg(b.tmax)}° / ${deg(b.tmin)}°` : `${deg(b.temp)}°`);
+      const rain = el("td", "num", b.precip ? `${num(b.precip, f1)} mm` : "–");
+      if (b.prob != null && b.prob >= 10) rain.append(el("small", null, ` ${num(b.prob, f0)} %`));
+      const wind = el("td", "num");
+      if (b.dir != null) wind.append(windArrow(b.dir));
+      wind.append(b.wind == null ? "–" : num(b.wind, f0) + (b.gust != null ? ` (${num(b.gust, f0)})` : ""));
+      tr.append(el("td", "num", span(b)), sky, temp, rain, wind,
+        el("td", "num opt", b.humidity == null ? "–" : `${num(b.humidity, f0)} %`),
+        el("td", "num opt", b.cloud == null ? "–" : `${num(b.cloud, f0)} %`));
+      if (b.precip) tr.classList.add(b.snow ? "snowy" : "wet");
+      tbody.append(tr);
+    }
+    table.append(tbody);
+    const scroll = el("div", "wxp-scroll");
+    scroll.append(table);
+
+    const credit = el("p", "wx-credit");
+    credit.innerHTML = `Forecast from <a href="https://www.yr.no/" target="_blank" rel="noopener">Yr</a>, data by MET Norway` +
+      (w.updated_at ? ` · updated ${when(Date.parse(w.updated_at) / 1000)}` : "") +
+      (rows.some((b) => b.len > 3600) ? " · 6-hour periods further ahead, as the forecast gets coarser" : "");
+
+    $("popBody").replaceChildren(tabs, head, stats, ...warns, el("h4", "wxp-sub", "Temperature"), chart,
+      el("h4", "wxp-sub", rows.every((b) => b.len === 3600) ? (today ? "Hour by hour, rest of today" : "Hour by hour") : "Through the day"),
+      scroll, credit);
+
+    // temperature over the day, drawn in place so it knows its width
+    const pts = rows.filter((b) => b.temp != null).map((b) => ({ t: b.ts, y: b.temp, b }));
+    const narrow = chart.clientWidth < 560, ticks = [];
+    if (pts.length) {
+      for (let t = Math.ceil(pts[0].t / 3600) * 3600; t <= pts[pts.length - 1].t; t += 3600) {
+        if (+hm(t).slice(0, 2) % (narrow ? 6 : 3) === 0) ticks.push(t);
+      }
+    }
+    Charts.line(chart, pts, {
+      height: Math.round(Math.max(160, Math.min(220, chart.clientWidth * 0.24))),
+      fit: true, minSpan: 4, cls: "temp", xTicks: ticks, xFmt: hm, yFmt: (v) => f0.format(v) + "°",
+      tip: (p) => `<div class="t">${span(p.b)}</div>` +
+        `<div class="r"><span>${wx(p.b.symbol)[1] || "Temperature"}</span><b>${num(p.y, f1)} °C</b></div>` +
+        (p.b.precip ? `<div class="r"><span>${p.b.snow ? "Snow" : "Rain"}</span><b>${num(p.b.precip, f1)} mm</b></div>` : "") +
+        (p.b.wind != null ? `<div class="r"><span>Wind</span><b>${num(p.b.wind, f0)} m/s</b></div>` : ""),
+      label: "Temperature over the day, °C",
+      emptyText: "Not enough forecast left for a chart",
     });
   }
 
@@ -455,9 +600,13 @@
     $("calFoot").textContent = errors.length ? "Couldn't update " + errors.join(" · ") : "";
   }
 
+  let wxData = null;              // the latest forecast, for the weather popup
+
   async function loadWeather() {
     let w;
     try { w = await get("/api/weather"); } catch { return; }
+    wxData = w;
+    if (pop.kind === "weather") renderWeatherPop();
     const show = !!(w.enabled && w.now);
     if ($("weather").hidden === show) { $("weather").hidden = !show; dash.refresh(); }
     hu.weather = show;
@@ -564,7 +713,14 @@
     loadPrices();
     setInterval(loadPrices, 60000);         // moves "now" along
     let rt;
-    window.addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(() => { renderPrices(); if (pop.kind === "power") renderPowerPop(); }, 150); });
+    window.addEventListener("resize", () => {
+      clearTimeout(rt);
+      rt = setTimeout(() => {
+        renderPrices();
+        if (pop.kind === "power") renderPowerPop();
+        if (pop.kind === "weather") renderWeatherPop();
+      }, 150);
+    });
     loadCalendar();
     setInterval(loadCalendar, 60000);       // the server re-reads calendars every 15 min; this keeps "Now" current
   })();

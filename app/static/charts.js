@@ -119,20 +119,28 @@
     });
   }
 
-  /** points: [{t, y}] sorted by t;  opts: {height, yFmt, xFmt(t), xTicks:[t], tip(point) -> html} */
+  /** points: [{t, y}] sorted by t;  opts: {height, yFmt, xFmt(t), xTicks:[t], tip(point) -> html,
+   *          fit (y axis spans the data instead of starting at 0, e.g. temperatures; at least minSpan wide),
+   *          cls (class on the svg)} */
   function line(container, points, opts = {}) {
     const W = Math.max(280, container.clientWidth);
     const H = opts.height || 200;
     const m = { l: 44, r: 10, t: 12, b: 22 };
     const iw = W - m.l - m.r, ih = H - m.t - m.b;
     container.innerHTML = "";
-    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": opts.label || "" }, container);
+    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, height: H, role: "img", "aria-label": opts.label || "", class: opts.cls || "" }, container);
     if (points.length < 2) {
       el("text", { x: W / 2, y: H / 2, "text-anchor": "middle", class: "empty" }, svg).textContent = opts.emptyText || "Waiting for data…";
       return;
     }
     const t0 = opts.tMin ?? points[0].t, t1 = opts.tMax ?? points[points.length - 1].t;
-    const { lo, hi, ticks } = niceTicks(0, Math.max(...points.map((p) => p.y)), 4);
+    let yMin = Math.min(...points.map((p) => p.y)), yMax = Math.max(...points.map((p) => p.y));
+    if (!opts.fit) yMin = 0;
+    else if (yMax - yMin < (opts.minSpan || 0)) {     // a flat day stays flat instead of zooming in on decimals
+      const mid = (yMin + yMax) / 2;
+      [yMin, yMax] = [mid - opts.minSpan / 2, mid + opts.minSpan / 2];
+    }
+    const { lo, hi, ticks } = niceTicks(yMin, yMax, 4);
     const x = (t) => m.l + ((t - t0) / (t1 - t0 || 1)) * iw;
     const y = (v) => m.t + ih - ((v - lo) / (hi - lo)) * ih;
 
@@ -146,12 +154,12 @@
     }
     let d = "";
     points.forEach((p, i) => { d += (i ? "L" : "M") + x(p.t).toFixed(1) + "," + y(p.y).toFixed(1); });
-    el("path", { class: "area", d: d + `L${x(points[points.length - 1].t)},${y(0)}L${x(points[0].t)},${y(0)}Z` }, svg);
+    if (!opts.fit) el("path", { class: "area", d: d + `L${x(points[points.length - 1].t)},${y(0)}L${x(points[0].t)},${y(0)}Z` }, svg);
+    if (lo <= 0 && hi >= 0) el("line", { class: "baseline", x1: m.l, x2: W - m.r, y1: y(0), y2: y(0) }, svg);
     el("path", { class: "line", d }, svg);
-    el("line", { class: "baseline", x1: m.l, x2: W - m.r, y1: y(0), y2: y(0) }, svg);
 
     const cross = el("line", { class: "nowline", y1: m.t, y2: m.t + ih, visibility: "hidden" }, svg);
-    const dot = el("circle", { r: 4, fill: "var(--use)", stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, svg);
+    const dot = el("circle", { class: "pt", r: 4, visibility: "hidden" }, svg);
     const hit = el("rect", { class: "hit", x: m.l, y: m.t, width: iw, height: ih }, svg);
     hit.addEventListener("pointermove", (e) => {
       const r = svg.getBoundingClientRect();
