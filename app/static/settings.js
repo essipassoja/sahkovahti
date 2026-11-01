@@ -110,6 +110,41 @@
   }
 
   const dirty = () => JSON.stringify(read()) !== saved;
+
+  // ---------- section sidebar: where you are, and which sections have unsaved changes ----------
+  const nav = $("sectionNav");
+  const navLinks = [...nav.querySelectorAll("a")];
+  const sections = navLinks.map((a) => document.querySelector(a.hash));
+  const snap = (fs) => JSON.stringify([...fs.elements].map((el) =>
+    el.type === "checkbox" || el.type === "radio" ? el.checked : el.value));
+  let savedSnaps = [];
+  function markSaved() { saved = JSON.stringify(read()); savedSnaps = sections.map(snap); markChanged(); }
+  function markChanged() { navLinks.forEach((a, i) => a.classList.toggle("changed", snap(sections[i]) !== savedSnaps[i])); }
+
+  function markActive() {
+    const bar = getComputedStyle(nav).display === "flex";   // the top-bar layout on narrower screens
+    const line = bar ? nav.getBoundingClientRect().bottom + 24 : 80;
+    let i = Math.max(0, sections.findLastIndex((s) => s.getBoundingClientRect().top <= line));
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 4) i = sections.length - 1;
+    navLinks.forEach((a, j) => {
+      a.classList.toggle("active", j === i);
+      if (j === i) a.setAttribute("aria-current", "true"); else a.removeAttribute("aria-current");
+    });
+    if (bar) {   // keep the current link in view in the top bar
+      const cur = navLinks[i], l = cur.offsetLeft - nav.offsetLeft, r = l + cur.offsetWidth;
+      if (l < nav.scrollLeft || r > nav.scrollLeft + nav.clientWidth) nav.scrollTo({ left: l - 16 });
+    }
+  }
+  let raf = 0;
+  window.addEventListener("scroll", () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; markActive(); }); }, { passive: true });
+  window.addEventListener("resize", markActive);
+  navLinks.forEach((a, i) => a.addEventListener("click", (e) => {
+    e.preventDefault();
+    const smooth = !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    sections[i].scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+    history.replaceState(null, "", a.hash);
+  }));
+
   function setMsg(text, cls = "") { $("msg").textContent = text || " "; $("msg").className = "msg " + cls; }
   // "retailer_margin_c_kwh must be a number" → "Margin must be a number"
   function friendly(msg) {
@@ -125,8 +160,12 @@
     const r = await fetch("/api/settings", { cache: "no-store" });
     const d = await r.json();
     fill(d.values);
+    markSaved();
     // a freshly suggested topic counts as a change, so the page reminds you to save it
-    saved = d.topic_suggested ? "" : JSON.stringify(read());
+    if (d.topic_suggested) { saved = ""; savedSnaps[sections.indexOf($("s-notify"))] = ""; markChanged(); }
+    const target = location.hash && document.getElementById(location.hash.slice(1));
+    if (target) target.scrollIntoView();
+    markActive();
     renderPreview(d.now);
     showNotifier(d.notifier);
     checkCalendar();
@@ -232,9 +271,10 @@
   form.addEventListener("input", (e) => {
     if (e.target.name === "tariff.transfer_mode") showMode();
     if (e.target.name?.startsWith("notifications.")) updateSubLink();
+    markChanged();
     preview();
   });
-  form.addEventListener("change", (e) => { if (e.target.name === "tariff.transfer_mode") showMode(); preview(); });
+  form.addEventListener("change", (e) => { if (e.target.name === "tariff.transfer_mode") showMode(); markChanged(); preview(); });
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -242,7 +282,7 @@
     try {
       const d = await send("/api/settings", read());
       fill(d.values);
-      saved = JSON.stringify(read());
+      markSaved();
       renderPreview(d.now);
       setMsg("Saved ✓", "ok");
       checkCalendar();
@@ -260,7 +300,7 @@
     try {
       const d = await send("/api/settings/reset");
       fill(d.values);
-      saved = JSON.stringify(read());
+      markSaved();
       renderPreview(d.now);
       setMsg("Reset to config.toml values", "ok");
     } catch (err) { setMsg(err.message, "bad"); }
